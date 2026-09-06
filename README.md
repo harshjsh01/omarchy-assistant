@@ -79,7 +79,7 @@ Edit `~/.config/omarchy-assistant/config.json`:
 Add this line to `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + V", "Voice Assistant", { launch = "omarchy-assistant listen" })
+o.bind("SUPER + A", "Voice Assistant", { launch = "omarchy-assistant listen" })
 ```
 
 ---

@@ -113,10 +113,10 @@ nano ~/.config/hypr/bindings.lua
 
 Add this line:
 ```lua
-o.bind("SUPER + V", "Voice Assistant", { launch = "omarchy-assistant listen" })
+o.bind("SUPER + A", "Voice Assistant", { launch = "omarchy-assistant listen" })
 ```
 
-Hyprland will automatically reload the configuration. Press `SUPER + V` to speak!
+Hyprland will automatically reload the configuration. Press `SUPER + A` to speak!
 
 ---
 

@@ -21,5 +21,5 @@
   "ollama_host": "http://localhost:11434",
   "show_overlay": true,
   "overlay_timeout_seconds": 4.0,
-  "hotkey": "SUPER + V"
+  "hotkey": "SUPER + A"
 }

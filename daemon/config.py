@@ -49,7 +49,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "overlay_timeout_seconds": 4.0,
 
     # Keybinding hint
-    "hotkey": "SUPER + V"
+    "hotkey": "SUPER + A"
 }
 
 

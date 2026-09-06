@@ -39,7 +39,7 @@ BarWidget {
     tooltipText: {
       if (root.isListening) return "Voice Assistant: Listening..."
       if (root.isProcessing) return "Voice Assistant: Thinking & Executing..."
-      return "Voice Assistant (Click to speak / Super+V)"
+      return "Voice Assistant (Click to speak / Super+A)"
     }
 
     onPressed: function(mouseButton) {
