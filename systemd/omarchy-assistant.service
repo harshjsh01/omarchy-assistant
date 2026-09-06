@@ -1,0 +1,14 @@
+[Unit]
+Description=Omarchy Voice Assistant Daemon
+PartOf=graphical-session.target
+After=graphical-session.target pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/omarchy-assistant daemon-service
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=graphical-session.target

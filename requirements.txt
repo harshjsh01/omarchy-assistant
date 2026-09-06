@@ -1,0 +1,12 @@
+# Core dependencies (Python 3.10+)
+# Note: Basic features and cloud STT (Groq/OpenAI) run using Python standard library with zero pip packages!
+
+# Optional: High-performance offline STT (faster-whisper)
+faster-whisper>=1.0.0; extra == "offline"
+
+# Optional: Free cloud Google speech recognition
+SpeechRecognition>=3.10.0; extra == "google"
+
+# Optional: Direct sound recording via PyAudio / SoundDevice (alternative to native arecord)
+sounddevice>=0.4.6; extra == "audio"
+numpy>=1.24.0; extra == "audio"

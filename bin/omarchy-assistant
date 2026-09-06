@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+#
+# Omarchy Voice Assistant CLI
+# Controls the voice daemon, triggers listening, and manages configuration.
+#
+
+set -euo pipefail
+
+SOCKET_PATH="/tmp/omarchy-assistant.sock"
+CONFIG_FILE="${HOME}/.config/omarchy-assistant/config.json"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+    cat <<USAGE
+Omarchy Voice Assistant — Hands-free voice control for Omarchy Linux
+
+Usage:
+  omarchy-assistant listen                 Trigger voice listening cycle (push-to-talk)
+  omarchy-assistant stop-listening        Cancel the active listening cycle
+  omarchy-assistant exec "<command>"       Execute a voice command via text (dry-run/test)
+  omarchy-assistant status                 Show daemon status and configuration
+  omarchy-assistant start                  Start assistant daemon in background
+  omarchy-assistant stop                   Stop assistant daemon
+  omarchy-assistant restart                Restart assistant daemon
+  omarchy-assistant daemon-service         Run daemon in foreground (for systemd)
+  omarchy-assistant service <action>       Manage systemd service (enable, start, stop, status)
+  omarchy-assistant config [edit]          Show or edit configuration file
+  omarchy-assistant help                   Show this help message
+
+Examples:
+  omarchy-assistant listen
+  omarchy-assistant exec "switch to workspace 2"
+  omarchy-assistant exec "volume up"
+  omarchy-assistant exec "take screenshot"
+USAGE
+}
+
+is_daemon_running() {
+    [[ -S "$SOCKET_PATH" ]]
+}
+
+send_socket() {
+    local payload="$1"
+    python3 -c '
+import sys, socket, json
+sock_path = "'"$SOCKET_PATH"'"
+payload = json.loads(sys.argv[1])
+try:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(5.0)
+        s.connect(sock_path)
+        s.sendall(json.dumps(payload).encode("utf-8"))
+        res = s.recv(4096)
+        print(res.decode("utf-8"))
+except Exception as e:
+    print(json.dumps({"status": "error", "message": str(e)}))
+    sys.exit(1)
+' "$payload"
+}
+
+cmd="${1:-listen}"
+
+case "$cmd" in
+    listen|trigger)
+        if ! is_daemon_running; then
+            echo "[omarchy-assistant] Daemon not active. Launching daemon session..."
+            PYTHONPATH="$REPO_DIR" python3 -m daemon.main >/dev/null 2>&1 &
+            sleep 0.8
+        fi
+        send_socket '{"action": "listen"}'
+        ;;
+
+    stop-listening)
+        if is_daemon_running; then
+            send_socket '{"action": "stop_listening"}'
+        fi
+        ;;
+
+    exec|execute)
+        shift || true
+        text="${*:-}"
+        if [[ -z "$text" ]]; then
+            echo "Error: No command text provided." >&2
+            echo "Usage: omarchy-assistant exec \"open terminal\"" >&2
+            exit 1
+        fi
+
+        if is_daemon_running; then
+            send_socket "{\"action\": \"execute\", \"text\": \"$text\"}"
+        else
+            PYTHONPATH="$REPO_DIR" python3 -m daemon.main --test-text "$text"
+        fi
+        ;;
+
+    status)
+        echo "=== Omarchy Voice Assistant Status ==="
+        if is_daemon_running; then
+            echo "Daemon: RUNNING (Socket: $SOCKET_PATH)"
+            send_socket '{"action": "status"}' | jq . 2>/dev/null || true
+        else
+            echo "Daemon: STOPPED (Socket: $SOCKET_PATH not found)"
+        fi
+        echo "Config file: $CONFIG_FILE"
+        if [[ -f "$CONFIG_FILE" ]]; then
+            echo "--- Active Config ---"
+            jq . "$CONFIG_FILE" 2>/dev/null || cat "$CONFIG_FILE"
+        fi
+        ;;
+
+    daemon-service)
+        export PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}"
+        exec python3 -m daemon.main
+        ;;
+
+    start)
+        if is_daemon_running; then
+            echo "Omarchy Assistant daemon is already running."
+            exit 0
+        fi
+        echo "Starting Omarchy Assistant daemon..."
+        PYTHONPATH="$REPO_DIR:${PYTHONPATH:-}" nohup python3 -m daemon.main >/dev/null 2>&1 &
+        sleep 1
+        if is_daemon_running; then
+            echo "Daemon started successfully."
+        else
+            echo "Failed to start daemon." >&2
+            exit 1
+        fi
+        ;;
+
+    stop)
+        if is_daemon_running; then
+            pkill -f "python3 -m daemon.main" || true
+            rm -f "$SOCKET_PATH"
+            echo "Omarchy Assistant daemon stopped."
+        else
+            echo "Daemon was not running."
+        fi
+        ;;
+
+    restart)
+        "$0" stop
+        sleep 0.5
+        "$0" start
+        ;;
+
+    service)
+        subaction="${2:-status}"
+        systemctl --user "$subaction" omarchy-assistant.service
+        ;;
+
+    config)
+        sub="${2:-show}"
+        if [[ "$sub" == "edit" ]]; then
+            ${EDITOR:-nano} "$CONFIG_FILE"
+        else
+            if [[ -f "$CONFIG_FILE" ]]; then
+                jq . "$CONFIG_FILE" 2>/dev/null || cat "$CONFIG_FILE"
+            else
+                echo "Config file does not exist yet ($CONFIG_FILE)."
+            fi
+        fi
+        ;;
+
+    -h|--help|help)
+        usage
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        usage
+        exit 1
+        ;;
+esac

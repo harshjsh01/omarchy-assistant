@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "harshjsh01.assistant",
+  "name": "Omarchy Voice Assistant",
+  "version": "1.0.0",
+  "author": "Harsh Joshi",
+  "license": "MIT",
+  "description": "Full-system voice command control and AI assistant for Omarchy Linux with Hyprland and Quickshell.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Voice Assistant",
+    "description": "Voice command indicator, visual feedback HUD, and push-to-talk button",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
