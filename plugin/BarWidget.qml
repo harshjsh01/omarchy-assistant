@@ -10,17 +10,24 @@ BarWidget {
 
   property string currentState: "idle"
 
-  // Poll state or react to assistant trigger
+  Process {
+    id: statusProc
+    command: ["omarchy-shell", "-q", "assistant", "state"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: function() {
+        var s = (text || "").trim()
+        if (s !== "") root.currentState = s
+      }
+    }
+  }
+
   Timer {
     interval: 2000
     running: true
     repeat: true
     onTriggered: {
-      var proc = Quickshell.exec(["omarchy-shell", "-q", "assistant", "state"])
-      proc.finished.connect(function() {
-        var s = (proc.stdout || "").trim()
-        if (s !== "") root.currentState = s
-      })
+      if (!statusProc.running) statusProc.running = true
     }
   }
 

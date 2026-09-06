@@ -8,7 +8,8 @@ set -euo pipefail
 
 SOCKET_PATH="/tmp/omarchy-assistant.sock"
 CONFIG_FILE="${HOME}/.config/omarchy-assistant/config.json"
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REAL_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO_DIR="$(cd "$(dirname "$REAL_PATH")/.." && pwd)"
 
 usage() {
     cat <<USAGE

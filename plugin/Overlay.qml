@@ -11,11 +11,7 @@ PanelWindow {
   property string assistantState: "idle" // idle, listening, processing, executing, speaking
   property string transcript: ""
   property string actionText: ""
-  property bool showHud: assistantState !== "idle"
-
-  visible: opacity > 0.01
-  opacity: showHud ? 1.0 : 0.0
-  Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+  visible: showHud
 
   anchors {
     top: true
@@ -32,6 +28,8 @@ PanelWindow {
 
   BorderSurface {
     id: hudCard
+    opacity: root.showHud ? 1.0 : 0.0
+    Behavior on opacity { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
     width: Math.max(340, Math.min(650, contentCol.implicitWidth + Style.space(32)))
     height: contentCol.implicitHeight + Style.space(24)
     anchors.horizontalCenter: parent.horizontalCenter
