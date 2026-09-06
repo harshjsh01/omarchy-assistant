@@ -74,7 +74,7 @@ echo ""
 echo "To trigger voice commands with your keyboard, add this line to"
 echo "your ~/.config/hypr/bindings.lua:"
 echo ""
-echo '  o.bind("SUPER + A", "Voice Assistant", { launch = "omarchy-assistant listen" })'
+echo '  o.bind("SUPER + A", "Voice Assistant", "omarchy-assistant listen")'
 echo ""
 echo "Try running a text simulation right now:"
 echo "  omarchy-assistant exec \"volume up\""
