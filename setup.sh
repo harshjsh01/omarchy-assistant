@@ -18,7 +18,7 @@ echo "=========================================================="
 
 # 1. Dependency checks
 echo "[1/6] Checking system tools..."
-for tool in python3 arecord wpctl hyprctl; do
+for tool in python3 arecord pw-record wpctl hyprctl; do
     if command -v "$tool" >/dev/null 2>&1; then
         echo "  ✓ Found: $tool"
     else
@@ -26,9 +26,10 @@ for tool in python3 arecord wpctl hyprctl; do
     fi
 done
 
-# 2. Setup configuration directory
+# 2. Setup configuration directory & transcripts directory
 echo "[2/6] Initializing configuration..."
 mkdir -p "$CONFIG_DIR"
+mkdir -p "${HOME}/Documents/Omarchy-Transcripts"
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
     cp "$REPO_DIR/config/config.json" "$CONFIG_DIR/config.json"
     echo "  ✓ Created $CONFIG_DIR/config.json"

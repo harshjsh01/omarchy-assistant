@@ -14,14 +14,19 @@ Control your entire operating system using natural speech — switch workspaces,
 ## ✨ Features
 
 - **🏎️ Sub-Second Voice Control**: Instant execution (<500ms) with lightweight audio capture and Voice Activity Detection (VAD).
-- **🪟 Full Hyprland & Wayland Mastery**: Direct IPC dispatch to switch workspaces, move windows, toggle fullscreen, float windows, and adjust layouts.
+- **🪟 Full Hyprland & Wayland Mastery (Omarvis Core)**: Direct IPC dispatch to switch workspaces, move windows, toggle fullscreen, float windows, and adjust layouts.
+- **🎙️ PipeWire Dual-Channel Meeting Transcription (Omavoice Integration)**:
+  - Simultaneously captures **local microphone** (you) and **system speaker output** (remote participants in Zoom, Google Meet, Microsoft Teams, Discord).
+  - Generates timestamped Markdown transcripts and AI executive summaries directly in `~/Documents/Omarchy-Transcripts/`.
+  - Start/stop via voice (`"start meeting transcription"` / `"stop meeting"`) or hotkey (`SUPER + ALT + A`).
 - **🎨 Native Omarchy Quickshell Plugin**:
-  - **Animated Status Bar Widget**: Displays live microphone states (`󰍬` idle, listening, thinking, executing).
+  - **Animated Status Bar Widget**: Displays live microphone states (`󰍬` idle, listening, thinking, executing, recording).
   - **Heads-Up Display (HUD) Overlay**: Floating visual card showing live speech transcripts, animated audio waves, and action badges.
 - **🔌 Multi-Engine Speech Recognition (STT)**:
   - **Offline Local**: `faster-whisper` (CTranslate2 INT8 quantized models) for 100% private, offline use.
   - **Ultra-Fast Cloud**: Groq Cloud API (`whisper-large-v3-turbo`) with response times under ~180ms.
   - **Zero-Config Cloud**: OpenAI Whisper API or Google Web Speech API.
+- **👁️ Screen & Context Awareness**: Ask `"What is on my screen?"` to trigger instant Wayland screenshot capture and visual analysis.
 - **⌨️ Voice Dictation & Input Synthesis**: Speak `"Type Hello World"` or `"Copy my email"` to inject keystrokes into any active Wayland window via `wtype` and `wl-copy`.
 - **🧠 Natural Language AI Fallback**: Complex requests are seamlessly routed to local **Ollama** or cloud LLMs to translate intent into shell commands.
 
@@ -74,13 +79,19 @@ Edit `~/.config/omarchy-assistant/config.json`:
 
 *(See [INSTALL.md](INSTALL.md) for full configuration options, including offline local Whisper).*
 
-### 3. Add Keybinding to Hyprland
-
-Add this line to `~/.config/hypr/bindings.lua`:
-
+### 3. Add Keybindings to Hyprland
+ 
+Add these lines to `~/.config/hypr/bindings.lua`:
+ 
 ```lua
-o.bind("SUPER + A", "Voice Assistant", "omarchy-assistant listen")
+-- Voice Assistant HUD
+o.bind("SUPER + A", "Voice Assistant", "/home/rio_krishna/.local/bin/omarchy-assistant listen")
+
+-- Toggle Two-Way Meeting Recording (Mic + Call Participants)
+o.bind("SUPER + ALT + A", "Toggle Meeting Transcription", "/home/rio_krishna/.local/bin/omarchy-assistant meeting start")
 ```
+
+*(Note: `SUPER + V` is left completely intact as your universal clipboard manager).*
 
 ---
 
@@ -90,6 +101,8 @@ o.bind("SUPER + A", "Voice Assistant", "omarchy-assistant listen")
 |---|---|
 | **Workspaces** | *"Switch to workspace 2"*, *"Move to workspace 4"*, *"Workspace 1"* |
 | **Window Control** | *"Close window"*, *"Toggle fullscreen"*, *"Float window"*, *"Split screen"* |
+| **Meetings** | *"Start meeting transcription"*, *"Stop meeting"*, *"Meeting status"* |
+| **Screen Vision** | *"What is on my screen?"*, *"Describe my screen"* |
 | **Volume & Audio** | *"Volume up"*, *"Volume 70 percent"*, *"Mute"*, *"Mute mic"*, *"Unmute mic"* |
 | **Media Playback** | *"Play"*, *"Pause"*, *"Next track"*, *"Previous song"* |
 | **Display & Look** | *"Brightness up"*, *"Screen 80%"*, *"Turn on night light"*, *"Change theme to catppuccin"* |
@@ -107,6 +120,12 @@ o.bind("SUPER + A", "Voice Assistant", "omarchy-assistant listen")
 ```bash
 # Push-to-talk trigger
 omarchy-assistant listen
+
+# Meeting Transcription (Dual-channel: Mic + Speaker call audio)
+omarchy-assistant meeting start    # Begins recording both streams
+omarchy-assistant meeting status   # Checks active recording duration
+omarchy-assistant meeting stop     # Stops, transcribes, and saves to ~/Documents/Omarchy-Transcripts/
+omarchy-assistant meeting list     # Lists saved meeting notes
 
 # Simulate or test command via text
 omarchy-assistant exec "switch to workspace 3"

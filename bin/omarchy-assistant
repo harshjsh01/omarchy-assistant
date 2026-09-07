@@ -24,8 +24,10 @@ Usage:
   omarchy-assistant stop                   Stop assistant daemon
   omarchy-assistant restart                Restart assistant daemon
   omarchy-assistant daemon-service         Run daemon in foreground (for systemd)
-  omarchy-assistant service <action>       Manage systemd service (enable, start, stop, status)
-  omarchy-assistant config [edit]          Show or edit configuration file
+  omarchy-assistant meeting start          Start dual-channel meeting recording & transcription
+  omarchy-assistant meeting stop           Stop meeting and generate Markdown transcript + summary
+  omarchy-assistant meeting status         Check active meeting recording status
+  omarchy-assistant meeting list           List saved meeting transcripts
   omarchy-assistant help                   Show this help message
 
 Examples:
@@ -148,6 +150,27 @@ case "$cmd" in
     service)
         subaction="${2:-status}"
         systemctl --user "$subaction" omarchy-assistant.service
+        ;;
+
+    meeting)
+        subcmd="${2:-status}"
+        case "$subcmd" in
+            start)
+                send_socket '{"action": "meeting_start"}'
+                ;;
+            stop)
+                send_socket '{"action": "meeting_stop"}'
+                ;;
+            status)
+                send_socket '{"action": "meeting_status"}'
+                ;;
+            list)
+                ls -la "${HOME}/Documents/Omarchy-Transcripts/" 2>/dev/null || echo "No transcripts yet."
+                ;;
+            *)
+                echo "Usage: omarchy-assistant meeting {start|stop|status|list}"
+                ;;
+        esac
         ;;
 
     config)

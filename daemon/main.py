@@ -15,6 +15,7 @@ from .config import load_config, save_config
 from .command_router import CommandRouter
 from .executor import ActionExecutor
 from .ipc_server import IPCServer
+from .meeting_transcriber import MeetingRecorder
 from .stt_engine import get_stt_engine
 from .tts_engine import TTSEngine
 
@@ -30,8 +31,9 @@ class AssistantDaemon:
         self.router = CommandRouter(self.config)
         self.executor = ActionExecutor(self.config)
         self.tts = TTSEngine(self.config)
+        self.meeting = MeetingRecorder(self.config, self.stt, self.router)
 
-        self.state = "idle"  # idle, listening, processing, executing, speaking
+        self.state = "idle"  # idle, listening, processing, executing, speaking, meeting_recording
         self.current_transcript = ""
         self.last_action = {}
         self.is_busy = False
@@ -73,6 +75,23 @@ class AssistantDaemon:
 
             threading.Thread(target=self._run_text_pipeline, args=(text,), daemon=True).start()
             return {"status": "started", "text": text}
+
+        elif action == "meeting_start":
+            res = self.meeting.start_meeting()
+            if res.get("status") == "started":
+                self.state = "meeting_recording"
+                self.executor.notify_quickshell("meeting_recording", action_desc="Recording Meeting (Mic + Speakers)")
+            return res
+
+        elif action == "meeting_stop":
+            self.executor.notify_quickshell("processing", action_desc="Transcribing Meeting Audio...")
+            res = self.meeting.stop_and_transcribe()
+            self.state = "idle"
+            self.executor.notify_quickshell("idle")
+            return res
+
+        elif action == "meeting_status":
+            return self.meeting.status()
 
         return {"status": "error", "message": f"Unknown action '{action}'"}
 

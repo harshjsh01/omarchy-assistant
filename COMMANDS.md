@@ -117,7 +117,29 @@ This document catalogs the voice commands supported out-of-the-box by **Omarchy 
 
 ---
 
-## 🧠 11. Natural Language & AI Fallback
+## 🎙️ 11. Meeting Transcription (Omavoice + Omarvis Dual Audio)
+
+Captures both **Microphone** (your speech) and **PipeWire System Sink** (remote participants in Zoom, Google Meet, Microsoft Teams, Discord, etc.).
+
+| Voice Command | Action Taken | Subsystem Command |
+|---|---|---|
+| `"Start meeting transcription"` / `"Record meeting"` / `"Join meeting"` | Begins recording local mic + remote speaker streams | `omarchy-assistant meeting start` |
+| `"Stop meeting transcription"` / `"Stop meeting"` / `"End meeting"` | Stops recording, generates markdown transcript & AI summary | `omarchy-assistant meeting stop` |
+| `"Meeting status"` / `"Is meeting recording"` | Checks if meeting capture is active | `omarchy-assistant meeting status` |
+
+*Meeting transcripts are automatically formatted and saved to `~/Documents/Omarchy-Transcripts/Meeting_<timestamp>.md`.*
+
+---
+
+## 👁️ 12. Screen Vision & Context (Omarvis)
+
+| Voice Command | Action Taken | Subsystem Command |
+|---|---|---|
+| `"What is on my screen"` / `"Describe my screen"` / `"Summarize my screen"` | Captures screen context and analyzes active window contents | `omarchy capture screenshot` |
+
+---
+
+## 🧠 13. Natural Language & AI Fallback
 
 When a spoken instruction does not match a hardcoded regex pattern, it is automatically handed over to the LLM engine (Ollama local / Groq Cloud / OpenAI).
 

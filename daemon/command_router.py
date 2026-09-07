@@ -296,6 +296,42 @@ class CommandRouter:
                 "category": "omarchy"
             }
 
+        # --- Meeting Transcription (Omavoice + Omarvis Dual-Channel Capture) ---
+        if re.search(r"\b(start meeting transcription|start meeting record|record meeting|transcribe meeting|join meeting)\b", text):
+            return {
+                "status": "matched",
+                "intent": "start_meeting_transcription",
+                "command": "omarchy-assistant meeting start",
+                "spoken_response": "Meeting transcription started. Recording your microphone and speaker call audio.",
+                "category": "meeting"
+            }
+        if re.search(r"\b(stop meeting transcription|stop meeting|end meeting|finish meeting|save meeting)\b", text):
+            return {
+                "status": "matched",
+                "intent": "stop_meeting_transcription",
+                "command": "omarchy-assistant meeting stop",
+                "spoken_response": "Meeting ended. Saving dual-channel transcript to Documents.",
+                "category": "meeting"
+            }
+        if re.search(r"\b(meeting status|is meeting recording)\b", text):
+            return {
+                "status": "matched",
+                "intent": "meeting_status",
+                "command": "omarchy-assistant meeting status",
+                "spoken_response": "Checking meeting status.",
+                "category": "meeting"
+            }
+
+        # --- Screen Awareness (Omarvis Feature) ---
+        if re.search(r"\b(what is on my screen|summarize my screen|look at my screen|describe my screen)\b", text):
+            return {
+                "status": "matched",
+                "intent": "screen_vision",
+                "command": "omarchy capture screenshot && notify-send -a 'Omarchy Assistant' 'Screen Analysis' 'Analyzing active windows and visible content...'",
+                "spoken_response": "Analyzing your current screen.",
+                "category": "vision"
+            }
+
         # --- Application Launching ---
         if re.search(r"\b(open browser|launch browser|start browser|open chrome|open firefox)\b", text):
             return {
