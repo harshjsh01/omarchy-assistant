@@ -4,6 +4,7 @@ Coordinates audio recording, speech recognition, intent routing, and execution.
 """
 
 import argparse
+import json
 import os
 import sys
 import threading
@@ -42,6 +43,30 @@ class AssistantDaemon:
         self.lock = threading.Lock()
 
         self.ipc_server = IPCServer(self.handle_ipc_request)
+        self.set_state("idle")
+
+    def set_state(self, state: str, transcript: str = "", action_desc: str = "") -> None:
+        """Atomically update state and persist to /tmp/omarchy-assistant-state.json."""
+        self.state = state
+        if transcript:
+            self.current_transcript = transcript
+        state_data = {
+            "state": state,
+            "continuous_mode": self.continuous_mode,
+            "transcript": self.current_transcript,
+            "last_action": action_desc or (self.last_action.get("spoken_response", "") if isinstance(self.last_action, dict) else ""),
+            "stt_engine": self.stt.__class__.__name__,
+            "tts_enabled": self.tts.enabled,
+            "timestamp": time.time()
+        }
+        try:
+            tmp = "/tmp/omarchy-assistant-state.json.tmp"
+            with open(tmp, "w") as f:
+                json.dump(state_data, f)
+            os.replace(tmp, "/tmp/omarchy-assistant-state.json")
+        except Exception:
+            pass
+        self.executor.notify_quickshell(state, self.current_transcript, action_desc)
 
     def handle_ipc_request(self, req: Dict[str, Any]) -> Dict[str, Any]:
         """Dispatch IPC requests."""
@@ -69,13 +94,22 @@ class AssistantDaemon:
         elif action == "stop_listening":
             if self.state == "listening":
                 self.recorder.stop_recording()
+                self.set_state("idle")
                 return {"status": "stopped"}
             return {"status": "not_listening"}
+
+        elif action == "toggle_tts":
+            self.tts.enabled = not self.tts.enabled
+            self.config["tts_enabled"] = self.tts.enabled
+            save_config(self.config)
+            self.set_state(self.state)
+            return {"status": "ok", "tts_enabled": self.tts.enabled}
 
         elif action == "continuous_start":
             if self.continuous_mode:
                 return {"status": "already_active", "message": "Continuous listening is already active."}
             self.continuous_mode = True
+            self.set_state("listening")
             self._continuous_thread = threading.Thread(target=self._run_continuous_loop, daemon=True)
             self._continuous_thread.start()
             return {"status": "started", "message": "Continuous listening started."}
@@ -85,19 +119,18 @@ class AssistantDaemon:
                 return {"status": "not_active", "message": "Continuous listening is not active."}
             self.continuous_mode = False
             self.recorder.stop_recording()
-            self.state = "idle"
-            self.executor.notify_quickshell("idle")
+            self.set_state("idle")
             return {"status": "stopped", "message": "Continuous listening stopped."}
 
         elif action == "continuous_toggle":
             if self.continuous_mode:
                 self.continuous_mode = False
                 self.recorder.stop_recording()
-                self.state = "idle"
-                self.executor.notify_quickshell("idle")
+                self.set_state("idle")
                 return {"status": "stopped", "message": "Continuous listening stopped."}
             else:
                 self.continuous_mode = True
+                self.set_state("listening")
                 self._continuous_thread = threading.Thread(target=self._run_continuous_loop, daemon=True)
                 self._continuous_thread.start()
                 return {"status": "started", "message": "Continuous listening started."}
@@ -117,15 +150,13 @@ class AssistantDaemon:
         elif action == "meeting_start":
             res = self.meeting.start_meeting()
             if res.get("status") == "started":
-                self.state = "meeting_recording"
-                self.executor.notify_quickshell("meeting_recording", action_desc="Recording Meeting (Mic + Speakers)")
+                self.set_state("meeting_recording", action_desc="Recording Meeting (Mic + Speakers)")
             return res
 
         elif action == "meeting_stop":
-            self.executor.notify_quickshell("processing", action_desc="Transcribing Meeting Audio...")
+            self.set_state("processing", action_desc="Transcribing Meeting Audio...")
             res = self.meeting.stop_and_transcribe()
-            self.state = "idle"
-            self.executor.notify_quickshell("idle")
+            self.set_state("idle")
             return res
 
         elif action == "meeting_status":
@@ -138,10 +169,8 @@ class AssistantDaemon:
             self.is_busy = True
             try:
                 # 1. Update state: listening
-                self.state = "listening"
-                self.current_transcript = ""
                 greeting = "I'm live, how may I assist you today?"
-                self.executor.notify_quickshell("listening", transcript=greeting)
+                self.set_state("listening", transcript=greeting)
                 self.executor.send_desktop_notification(
                     {"intent": "assistant_ready", "spoken_response": greeting},
                     success=True
@@ -160,13 +189,11 @@ class AssistantDaemon:
                     self.recorder.play_feedback_tone("stop")
 
                 if not wav_path or not os.path.exists(wav_path):
-                    self.state = "idle"
-                    self.executor.notify_quickshell("idle")
+                    self.set_state("idle")
                     return
 
                 # 3. Update state: processing STT
-                self.state = "processing"
-                self.executor.notify_quickshell("processing")
+                self.set_state("processing")
 
                 transcript = self.stt.transcribe(wav_path)
                 self.current_transcript = transcript
@@ -178,8 +205,7 @@ class AssistantDaemon:
                     pass
 
                 if not transcript or not transcript.strip():
-                    self.state = "idle"
-                    self.executor.notify_quickshell("idle")
+                    self.set_state("idle")
                     return
 
                 # 4. Route intent
@@ -187,8 +213,7 @@ class AssistantDaemon:
                 self.last_action = action
 
                 # 5. Execute action
-                self.state = "executing"
-                self.executor.notify_quickshell(
+                self.set_state(
                     "executing",
                     transcript=transcript,
                     action_desc=action.get("spoken_response", "")
@@ -198,26 +223,29 @@ class AssistantDaemon:
 
                 # 6. Optional TTS feedback
                 if action.get("spoken_response"):
-                    self.state = "speaking"
+                    self.set_state(
+                        "speaking",
+                        transcript=transcript,
+                        action_desc=action.get("spoken_response", "")
+                    )
                     self.tts.speak(action["spoken_response"])
 
                 # If requested to start continuous mode, transition now
                 if action.get("intent") == "start_continuous":
                     time.sleep(1.0)
                     self.continuous_mode = True
+                    self.set_state("listening")
                     self._continuous_thread = threading.Thread(target=self._run_continuous_loop, daemon=True)
                     self._continuous_thread.start()
                     return
 
                 # Done
                 time.sleep(1.0)
-                self.state = "idle"
-                self.executor.notify_quickshell("idle")
+                self.set_state("idle")
 
             except Exception as e:
                 print(f"[omarchy-assistant] Pipeline error: {e}", file=sys.stderr)
-                self.state = "idle"
-                self.executor.notify_quickshell("idle")
+                self.set_state("idle")
             finally:
                 self.is_busy = False
 
@@ -235,9 +263,7 @@ class AssistantDaemon:
         while self.continuous_mode:
             try:
                 # 1. Listening state
-                self.state = "listening"
-                self.current_transcript = ""
-                self.executor.notify_quickshell("listening")
+                self.set_state("listening")
 
                 # 2. Record audio with VAD
                 wav_path = self.recorder.record_with_vad(
@@ -265,8 +291,7 @@ class AssistantDaemon:
                     continue
 
                 # 3. Transcribe
-                self.state = "processing"
-                self.executor.notify_quickshell("processing")
+                self.set_state("processing")
 
                 transcript = self.stt.transcribe(wav_path)
                 self.current_transcript = transcript
@@ -277,8 +302,7 @@ class AssistantDaemon:
                     pass
 
                 if not transcript or not transcript.strip():
-                    self.state = "listening"
-                    self.executor.notify_quickshell("listening")
+                    self.set_state("listening")
                     time.sleep(0.1)
                     continue
 
@@ -289,11 +313,9 @@ class AssistantDaemon:
                 if any(p in clean_lower for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
                     self.continuous_mode = False
                     bye = "Continuous listening stopped. Press Super plus A or say Hey Max when you need me."
-                    self.state = "speaking"
-                    self.executor.notify_quickshell("idle")
+                    self.set_state("speaking", transcript=transcript, action_desc=bye)
                     self.tts.speak(bye, wait=True)
-                    self.state = "idle"
-                    self.executor.notify_quickshell("idle")
+                    self.set_state("idle")
                     break
 
                 # 4. Route intent
@@ -302,17 +324,14 @@ class AssistantDaemon:
 
                 if action.get("intent") == "stop_continuous":
                     self.continuous_mode = False
-                    self.state = "speaking"
-                    self.executor.notify_quickshell("idle")
+                    self.set_state("speaking", transcript=transcript, action_desc=action.get("spoken_response", ""))
                     if action.get("spoken_response"):
                         self.tts.speak(action["spoken_response"], wait=True)
-                    self.state = "idle"
-                    self.executor.notify_quickshell("idle")
+                    self.set_state("idle")
                     break
 
                 # 5. Execute action
-                self.state = "executing"
-                self.executor.notify_quickshell(
+                self.set_state(
                     "executing",
                     transcript=transcript,
                     action_desc=action.get("spoken_response", "")
@@ -322,7 +341,11 @@ class AssistantDaemon:
 
                 # 6. Speak response synchronously so microphone does not pick up Max's own voice
                 if action.get("spoken_response"):
-                    self.state = "speaking"
+                    self.set_state(
+                        "speaking",
+                        transcript=transcript,
+                        action_desc=action.get("spoken_response", "")
+                    )
                     self.tts.speak(action["spoken_response"], wait=True)
 
                 # Delay slightly so room acoustic echo clears before opening mic again
@@ -333,22 +356,18 @@ class AssistantDaemon:
                 time.sleep(1.0)
 
         self.continuous_mode = False
-        self.state = "idle"
-        self.executor.notify_quickshell("idle")
+        self.set_state("idle")
 
     def _run_text_pipeline(self, text: str):
         with self.lock:
             self.is_busy = True
             try:
-                self.current_transcript = text
-                self.state = "processing"
-                self.executor.notify_quickshell("processing", transcript=text)
+                self.set_state("processing", transcript=text)
 
                 action = self.router.route(text)
                 self.last_action = action
 
-                self.state = "executing"
-                self.executor.notify_quickshell(
+                self.set_state(
                     "executing",
                     transcript=text,
                     action_desc=action.get("spoken_response", "")
@@ -357,11 +376,15 @@ class AssistantDaemon:
                 result = self.executor.execute(action)
 
                 if action.get("spoken_response"):
+                    self.set_state(
+                        "speaking",
+                        transcript=text,
+                        action_desc=action.get("spoken_response", "")
+                    )
                     self.tts.speak(action["spoken_response"])
 
                 time.sleep(1.0)
-                self.state = "idle"
-                self.executor.notify_quickshell("idle")
+                self.set_state("idle")
 
             finally:
                 self.is_busy = False

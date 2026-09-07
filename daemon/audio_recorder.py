@@ -24,11 +24,28 @@ class AudioRecorder:
         self.is_recording = False
         self.last_recording_had_speech = False
         self.start_time = 0.0
+        self._cleanup_old_temp_recordings()
+
+    def _cleanup_old_temp_recordings(self) -> None:
+        try:
+            for p in Path("/tmp").glob("omarchy_voice_*.wav"):
+                try:
+                    p.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        except Exception:
+            pass
 
     def start_recording(self) -> str:
         """Start capturing audio in the background."""
         if self.is_recording:
             self.stop_recording()
+
+        if self.current_wav_path and os.path.exists(self.current_wav_path):
+            try:
+                os.unlink(self.current_wav_path)
+            except OSError:
+                pass
 
         # Create temporary WAV file
         fd, self.current_wav_path = tempfile.mkstemp(suffix=".wav", prefix="omarchy_voice_")

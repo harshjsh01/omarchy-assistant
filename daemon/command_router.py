@@ -7,6 +7,9 @@ Includes fast regex rules and optional LLM fallback.
 import json
 import os
 import re
+import shutil
+import subprocess
+import sys
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
 
@@ -615,6 +618,21 @@ class CommandRouter:
                 "spoken_response": "Going to sleep. Press Super plus A or say Hey Max whenever you need me.",
                 "category": "assistant"
             }
+        # --- Chat Session Management ---
+        if re.search(r"\b(start new chat|new chat|start a new chat|naya chat|reset chat|clear conversation|new conversation)\b", text):
+            conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
+            if os.path.exists(conv_file):
+                try:
+                    os.unlink(conv_file)
+                except OSError:
+                    pass
+            return {
+                "status": "matched",
+                "intent": "new_chat",
+                "command": "",
+                "spoken_response": "Started a new chat session for you. What would you like to discuss?",
+                "category": "assistant"
+            }
 
         # --- Dictation & Typing ---
         m = re.search(r"^(type|write|dictate)\s+(.+)$", text)
@@ -735,7 +753,66 @@ class CommandRouter:
                 "category": "system"
             }
 
-        # 5. Cloud LLM (Groq / Ollama / OpenAI) if configured
+        # 5. Antigravity CLI (Gemini 3.8 Flash via active Google AI Pro session in ~/Work/chat)
+        try:
+            chat_dir = os.path.expanduser("~/Work/chat")
+            os.makedirs(chat_dir, exist_ok=True)
+            agy_bin = shutil.which("agy") or os.path.expanduser("~/.gemini/antigravity-cli/bin/agy")
+            if agy_bin and os.path.exists(agy_bin):
+                conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
+                active_conv = ""
+                if os.path.exists(conv_file):
+                    try:
+                        with open(conv_file, "r") as f:
+                            active_conv = f.read().strip()
+                    except Exception:
+                        pass
+
+                sys_instruct = (
+                    "[System instruction: You are Max, the conversational desktop AI assistant for Omarchy Linux. "
+                    "Respond concisely, naturally, and directly in 1 to 2 sentences suitable for speech synthesis. "
+                    "Support English and Hindi/Hinglish naturally. Do not output markdown headers or bold asterisks.]\n"
+                    f"User: {prompt}"
+                )
+                cmd = [agy_bin, "--effort", "low", "--output-format", "json", "--print", sys_instruct]
+                if active_conv:
+                    cmd.insert(1, "--conversation")
+                    cmd.insert(2, active_conv)
+
+                res = subprocess.run(
+                    cmd,
+                    cwd=chat_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=25
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    ans = ""
+                    try:
+                        data = json.loads(res.stdout.strip())
+                        new_conv = data.get("conversation_id", "")
+                        if new_conv:
+                            with open(conv_file, "w") as f:
+                                f.write(new_conv)
+                        ans = data.get("response", "").strip()
+                    except Exception:
+                        ans = res.stdout.strip()
+
+                    if ans.startswith("Output:"):
+                        ans = ans[7:].strip()
+                    # Clean markdown symbols for cleaner TTS
+                    ans_clean = ans.replace("**", "").replace("##", "").replace("`", "").strip()
+                    return {
+                        "status": "matched",
+                        "intent": "max_antigravity_ai",
+                        "command": "",
+                        "spoken_response": ans_clean,
+                        "category": "ai"
+                    }
+        except Exception as e:
+            print(f"[omarchy-assistant] Antigravity chat error: {e}", file=sys.stderr)
+
+        # 6. Cloud LLM (Groq / Ollama / OpenAI) if configured
         provider = self.config.get("llm_provider", "auto")
         groq_key = self.config.get("groq_api_key") or os.getenv("GROQ_API_KEY")
 
