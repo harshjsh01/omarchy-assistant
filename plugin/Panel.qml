@@ -234,6 +234,15 @@ Panel {
             spacing: Style.space(6)
 
             Button {
+              text: "󰦒 New Chat"
+              fontFamily: root.fontFamily
+              fontSize: Style.font.caption
+              onClicked: {
+                Quickshell.execDetached(["omarchy-assistant", "exec", "start new chat"])
+              }
+            }
+
+            Button {
               text: "󰅖"
               fontFamily: root.fontFamily
               fontSize: Style.font.caption

@@ -619,13 +619,8 @@ class CommandRouter:
                 "category": "assistant"
             }
         # --- Chat Session Management ---
-        if re.search(r"\b(start new chat|new chat|start a new chat|naya chat|reset chat|clear conversation|new conversation)\b", text):
-            conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
-            if os.path.exists(conv_file):
-                try:
-                    os.unlink(conv_file)
-                except OSError:
-                    pass
+        if re.search(r"\b(start\s+(a\s+)?(new|fresh)\s+chat|new\s+chat|fresh\s+chat|naya\s+chat|nayi\s+chat|reset\s+(chat|conversation)|clear\s+(chat|conversation)|new\s+conversation|create\s+(a\s+)?new\s+chat|start\s+(a\s+)?new\s+conversation)\b", text):
+            new_id = self._create_new_antigravity_session()
             return {
                 "status": "matched",
                 "intent": "new_chat",
@@ -660,11 +655,170 @@ class CommandRouter:
 
         return None
 
+    def _create_new_antigravity_session(self) -> str:
+        """Start a fresh conversation in ~/Work/chat and return its conversation ID."""
+        try:
+            chat_dir = os.path.expanduser("~/Work/chat")
+            os.makedirs(chat_dir, exist_ok=True)
+            agy_bin = shutil.which("agy") or os.path.expanduser("~/.gemini/antigravity-cli/bin/agy")
+            if not agy_bin or not os.path.exists(agy_bin):
+                return ""
+            res = subprocess.run(
+                [agy_bin, "--effort", "low", "--output-format", "json", "--print", "Hello Max, start a new chat session."],
+                cwd=chat_dir,
+                capture_output=True,
+                text=True,
+                timeout=35
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout.strip())
+                new_id = data.get("conversation_id", "")
+                if new_id:
+                    conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
+                    os.makedirs(os.path.dirname(conv_file), exist_ok=True)
+                    with open(conv_file, "w") as f:
+                        f.write(new_id)
+                    return new_id
+        except Exception as e:
+            print(f"[omarchy-assistant] Failed to start new Antigravity session: {e}", file=sys.stderr)
+        return ""
+
+    def _get_active_conversation_id(self) -> str:
+        """Retrieve the active conversation ID, ensuring we NEVER spawn accidental new chats."""
+        conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
+        if os.path.exists(conv_file):
+            try:
+                with open(conv_file, "r") as f:
+                    cid = f.read().strip()
+                    if cid:
+                        return cid
+            except Exception:
+                pass
+
+        # If not on disk, check conversation_summaries.db for existing chat in ~/Work/chat
+        try:
+            import sqlite3
+            db_path = os.path.expanduser("~/.gemini/antigravity-cli/conversation_summaries.db")
+            if os.path.exists(db_path):
+                with sqlite3.connect(db_path) as conn:
+                    cur = conn.cursor()
+                    row = cur.execute(
+                        "SELECT conversation_id FROM conversation_summaries "
+                        "WHERE workspace_uris LIKE '%Work/chat%' "
+                        "ORDER BY (conversation_id = 'cdd47467-6db4-44cc-8159-32ce795a2664') DESC, last_modified_time DESC LIMIT 1"
+                    ).fetchone()
+                    if row and row[0]:
+                        cid = row[0]
+                        os.makedirs(os.path.dirname(conv_file), exist_ok=True)
+                        with open(conv_file, "w") as f:
+                            f.write(cid)
+                        return cid
+        except Exception:
+            pass
+
+        # If still none found, create one now and lock it in
+        return self._create_new_antigravity_session()
+
     def _fallback_llm(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Conversational AI engine for Max (offline smart rules + LLM)."""
+        """Conversational AI engine for Max (fast helpers + live Antigravity Gemini session + offline fallback)."""
         clean = prompt.lower().strip()
 
-        # 1. Identity & Persona (Max)
+        # 1. Fast offline helpers: Time and Date
+        if re.search(r"\b(what time is it|time kya hai|kya time hua hai|current time)\b", clean):
+            import datetime
+            now_str = datetime.datetime.now().strftime("%I:%M %p")
+            return {
+                "status": "llm",
+                "intent": "current_time",
+                "command": "",
+                "spoken_response": f"It is currently {now_str}.",
+                "category": "ai"
+            }
+        if re.search(r"\b(what is today's date|today's date|aaj kaunsi tareekh hai|current date)\b", clean):
+            import datetime
+            now_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+            return {
+                "status": "llm",
+                "intent": "current_date",
+                "command": "",
+                "spoken_response": f"Today is {now_str}.",
+                "category": "ai"
+            }
+
+        # 2. Fast offline helpers: Basic math
+        calc_match = re.search(r"(?:what is|calculate|solve)?\s*(\d+(?:\.\d+)?\s*[\+\-\*\/xX]\s*\d+(?:\.\d+)?)\b", clean)
+        if calc_match:
+            expr = calc_match.group(1).replace("x", "*").replace("X", "*")
+            try:
+                val = eval(expr, {"__builtins__": None}, {})
+                return {
+                    "status": "llm",
+                    "intent": "calculator",
+                    "command": "",
+                    "spoken_response": f"The answer is {val}.",
+                    "category": "ai"
+                }
+            except Exception:
+                pass
+
+        # 3. Fast offline helpers: Battery
+        if re.search(r"\b(battery|battery level|battery percentage)\b", clean):
+            return {
+                "status": "llm",
+                "intent": "battery_status",
+                "command": "upower -i $(upower -e | grep 'BAT') 2>/dev/null | grep -E 'percentage|state' || echo 'No battery found'",
+                "spoken_response": "Checking battery status.",
+                "category": "system"
+            }
+
+        # 4. Primary Intelligence: Antigravity CLI (Gemini 3.8 Flash via active Google AI Pro session in ~/Work/chat)
+        try:
+            chat_dir = os.path.expanduser("~/Work/chat")
+            os.makedirs(chat_dir, exist_ok=True)
+            agy_bin = shutil.which("agy") or os.path.expanduser("~/.gemini/antigravity-cli/bin/agy")
+            if agy_bin and os.path.exists(agy_bin):
+                active_conv = self._get_active_conversation_id()
+
+                cmd = [agy_bin, "--effort", "low", "--output-format", "json", "--print", prompt]
+                if active_conv:
+                    cmd.insert(1, "--conversation")
+                    cmd.insert(2, active_conv)
+
+                res = subprocess.run(
+                    cmd,
+                    cwd=chat_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=35
+                )
+                if res.returncode == 0 and res.stdout.strip():
+                    ans = ""
+                    try:
+                        data = json.loads(res.stdout.strip())
+                        new_conv = data.get("conversation_id", "")
+                        if new_conv:
+                            conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
+                            with open(conv_file, "w") as f:
+                                f.write(new_conv)
+                        ans = data.get("response", "").strip()
+                    except Exception:
+                        ans = res.stdout.strip()
+
+                    if ans.startswith("Output:"):
+                        ans = ans[7:].strip()
+                    # Clean markdown symbols for cleaner TTS
+                    ans_clean = ans.replace("**", "").replace("##", "").replace("`", "").strip()
+                    return {
+                        "status": "matched",
+                        "intent": "max_antigravity_ai",
+                        "command": "",
+                        "spoken_response": ans_clean,
+                        "category": "ai"
+                    }
+        except Exception as e:
+            print(f"[omarchy-assistant] Antigravity chat error: {e}", file=sys.stderr)
+
+        # 5. Offline Fallback: Identity & Persona (Max)
         if re.search(r"\b(who are you|tum kaun ho|what is your name|apna naam batao|tell me about yourself)\b", clean):
             return {
                 "status": "llm",
@@ -703,114 +857,6 @@ class CommandRouter:
                 "spoken_response": random.choice(jokes),
                 "category": "ai"
             }
-
-        # 2. Time and Date Queries
-        if re.search(r"\b(what time is it|time kya hai|kya time hua hai|current time)\b", clean):
-            import datetime
-            now_str = datetime.datetime.now().strftime("%I:%M %p")
-            return {
-                "status": "llm",
-                "intent": "current_time",
-                "command": "",
-                "spoken_response": f"It is currently {now_str}.",
-                "category": "ai"
-            }
-        if re.search(r"\b(what is today's date|today's date|aaj kaunsi tareekh hai|current date)\b", clean):
-            import datetime
-            now_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
-            return {
-                "status": "llm",
-                "intent": "current_date",
-                "command": "",
-                "spoken_response": f"Today is {now_str}.",
-                "category": "ai"
-            }
-
-        # 3. Math & Quick Calculations
-        calc_match = re.search(r"(?:what is|calculate|solve)?\s*(\d+(?:\.\d+)?\s*[\+\-\*\/xX]\s*\d+(?:\.\d+)?)\b", clean)
-        if calc_match:
-            expr = calc_match.group(1).replace("x", "*").replace("X", "*")
-            try:
-                # Safe evaluation of basic math
-                val = eval(expr, {"__builtins__": None}, {})
-                return {
-                    "status": "llm",
-                    "intent": "calculator",
-                    "command": "",
-                    "spoken_response": f"The answer is {val}.",
-                    "category": "ai"
-                }
-            except Exception:
-                pass
-
-        # 4. System Specs & Battery
-        if re.search(r"\b(battery|battery level|battery percentage)\b", clean):
-            return {
-                "status": "llm",
-                "intent": "battery_status",
-                "command": "upower -i $(upower -e | grep 'BAT') 2>/dev/null | grep -E 'percentage|state' || echo 'No battery found'",
-                "spoken_response": "Checking battery status.",
-                "category": "system"
-            }
-
-        # 5. Antigravity CLI (Gemini 3.8 Flash via active Google AI Pro session in ~/Work/chat)
-        try:
-            chat_dir = os.path.expanduser("~/Work/chat")
-            os.makedirs(chat_dir, exist_ok=True)
-            agy_bin = shutil.which("agy") or os.path.expanduser("~/.gemini/antigravity-cli/bin/agy")
-            if agy_bin and os.path.exists(agy_bin):
-                conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
-                active_conv = ""
-                if os.path.exists(conv_file):
-                    try:
-                        with open(conv_file, "r") as f:
-                            active_conv = f.read().strip()
-                    except Exception:
-                        pass
-
-                sys_instruct = (
-                    "[System instruction: You are Max, the conversational desktop AI assistant for Omarchy Linux. "
-                    "Respond concisely, naturally, and directly in 1 to 2 sentences suitable for speech synthesis. "
-                    "Support English and Hindi/Hinglish naturally. Do not output markdown headers or bold asterisks.]\n"
-                    f"User: {prompt}"
-                )
-                cmd = [agy_bin, "--effort", "low", "--output-format", "json", "--print", sys_instruct]
-                if active_conv:
-                    cmd.insert(1, "--conversation")
-                    cmd.insert(2, active_conv)
-
-                res = subprocess.run(
-                    cmd,
-                    cwd=chat_dir,
-                    capture_output=True,
-                    text=True,
-                    timeout=25
-                )
-                if res.returncode == 0 and res.stdout.strip():
-                    ans = ""
-                    try:
-                        data = json.loads(res.stdout.strip())
-                        new_conv = data.get("conversation_id", "")
-                        if new_conv:
-                            with open(conv_file, "w") as f:
-                                f.write(new_conv)
-                        ans = data.get("response", "").strip()
-                    except Exception:
-                        ans = res.stdout.strip()
-
-                    if ans.startswith("Output:"):
-                        ans = ans[7:].strip()
-                    # Clean markdown symbols for cleaner TTS
-                    ans_clean = ans.replace("**", "").replace("##", "").replace("`", "").strip()
-                    return {
-                        "status": "matched",
-                        "intent": "max_antigravity_ai",
-                        "command": "",
-                        "spoken_response": ans_clean,
-                        "category": "ai"
-                    }
-        except Exception as e:
-            print(f"[omarchy-assistant] Antigravity chat error: {e}", file=sys.stderr)
 
         # 6. Cloud LLM (Groq / Ollama / OpenAI) if configured
         provider = self.config.get("llm_provider", "auto")
