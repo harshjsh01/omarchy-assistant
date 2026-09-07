@@ -22,6 +22,7 @@ class AudioRecorder:
         self.process: Optional[subprocess.Popen] = None
         self.current_wav_path: Optional[str] = None
         self.is_recording = False
+        self.last_recording_had_speech = False
         self.start_time = 0.0
 
     def start_recording(self) -> str:
@@ -154,6 +155,7 @@ class AudioRecorder:
             except Exception:
                 pass
 
+        self.last_recording_had_speech = has_spoken
         return self.stop_recording()
 
     def play_feedback_tone(self, tone_type: str = "start") -> None:

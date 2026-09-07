@@ -28,16 +28,28 @@ class CommandRouter:
             }
         """
         clean_text = text.lower().strip()
-        clean_text = re.sub(r"[^\w\s%+-]", "", clean_text)
+        # Direct wake call or greeting to Max
+        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max)\b$", clean_text):
+            return {
+                "status": "matched",
+                "intent": "greeting",
+                "command": "",
+                "spoken_response": "Yes, I am live. How may I assist you today?",
+                "category": "conversational"
+            }
+
+        # Strip wake prefix (e.g. "Max open browser" -> "open browser")
+        clean_text = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max)\b\s*", "", clean_text).strip()
+        normalized_text = re.sub(r"[^\w\s%+-]", "", clean_text)
 
         # 1. Direct Regex / Rule Matching
-        rule_match = self._match_rules(clean_text)
+        rule_match = self._match_rules(normalized_text)
         if rule_match:
             return rule_match
 
-        # 2. LLM Fallback (if enabled)
+        # 2. Conversational & LLM Fallback
         if self.config.get("llm_fallback_enabled", True):
-            llm_result = self._fallback_llm(text)
+            llm_result = self._fallback_llm(clean_text or text)
             if llm_result:
                 return llm_result
 
@@ -51,7 +63,7 @@ class CommandRouter:
 
     def _match_rules(self, text: str) -> Optional[Dict[str, Any]]:
         # --- Audio & Volume (English + Hindi/Hinglish) ---
-        if re.search(r"\b(volume up|increase volume|louder|sound up|awaaz badhao|awaz badhao|volume badhao|awaz badha do)\b", text):
+        if re.search(r"\b(volume up|increase volume|louder|sound up|aa?wa?a?[zj] badhao|volume badhao|aa?wa?a?[zj] badha do|aawaz badhao)\b", text):
             return {
                 "status": "matched",
                 "intent": "volume_up",
@@ -59,7 +71,7 @@ class CommandRouter:
                 "spoken_response": "Volume up",
                 "category": "audio"
             }
-        if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume|awaaz kam karo|awaz kam karo|volume kam karo|awaz dheemi karo)\b", text):
+        if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume|aa?wa?a?[zj] kam karo|volume kam karo|aa?wa?a?[zj] dheemi karo|aawaz kam karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "volume_down",
@@ -93,7 +105,7 @@ class CommandRouter:
                 "spoken_response": "Microphone unmuted",
                 "category": "audio"
             }
-        if re.search(r"\b(mute audio|mute sound|mute|unmute|awaaz band karo|awaz band karo|chup karo)\b", text):
+        if re.search(r"\b(mute audio|mute sound|mute|unmute|aa?wa?a?[zj] band karo|chup karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "toggle_mute",
@@ -408,11 +420,206 @@ class CommandRouter:
                 "category": "system"
             }
 
+        # --- Omarchy Menus & Shortcuts (SUPER + K Keybindings Table) ---
+        if re.search(r"\b(keybindings|shortcuts|shortcut menu|keys menu|saare shortcuts)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_keybindings",
+                "command": "omarchy-menu toggle keybindings",
+                "spoken_response": "Opening Omarchy keybindings reference",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(omarchy menu|root menu|main menu|start menu)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_root_menu",
+                "command": "omarchy-menu toggle root",
+                "spoken_response": "Opening Omarchy menu",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(system menu|system options)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_system_menu",
+                "command": "omarchy-menu toggle system",
+                "spoken_response": "Opening system menu",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(theme menu|change style|style menu)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_theme_menu",
+                "command": "omarchy-menu toggle theme",
+                "spoken_response": "Opening theme selector",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(clipboard manager|clipboard history|clipboard kholo|paste history)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_clipboard_menu",
+                "command": "omarchy-menu toggle clipboard",
+                "spoken_response": "Opening clipboard manager",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(emoji picker|emojis|emoji menu)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_emoji_menu",
+                "command": "omarchy-menu toggle emoji",
+                "spoken_response": "Opening emoji picker",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(open calculator|calculator|calculator kholo|hisab kitab)\b", text):
+            return {
+                "status": "matched",
+                "intent": "launch_calculator",
+                "command": "omarchy-menu toggle calculator || gnome-calculator &",
+                "spoken_response": "Opening calculator",
+                "category": "apps"
+            }
+        if re.search(r"\b(wifi menu|network menu|network settings|wifi kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_wifi_menu",
+                "command": "omarchy-menu toggle wifi",
+                "spoken_response": "Opening network menu",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(bluetooth menu|bluetooth settings|bluetooth kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_bluetooth_menu",
+                "command": "omarchy-menu toggle bluetooth",
+                "spoken_response": "Opening Bluetooth menu",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(audio menu|sound settings|volume menu)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_audio_menu",
+                "command": "omarchy-menu toggle audio",
+                "spoken_response": "Opening audio settings",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(power menu|shutdown menu|log out menu)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_power_menu",
+                "command": "omarchy-menu toggle power",
+                "spoken_response": "Opening power options",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(wallpapers|change wallpaper|wallpaper menu|background switcher)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_wallpaper_menu",
+                "command": "omarchy-menu toggle wallpaper",
+                "spoken_response": "Opening wallpaper switcher",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(toggle gaps|toggle window gaps|gaps toggle|gaps band karo|gaps chalu karo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_gaps",
+                "command": "omarchy toggle gaps 2>/dev/null || true",
+                "spoken_response": "Toggled window gaps",
+                "category": "hyprland"
+            }
+        if re.search(r"\b(toggle bar|toggle top bar|hide bar|show bar)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_bar",
+                "command": "omarchy-shell bar toggle 2>/dev/null || true",
+                "spoken_response": "Toggled top bar",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(notification center|notifications|show notifications|open notifications)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_notifications",
+                "command": "omarchy-shell rio_krishna.notifications toggle 2>/dev/null || true",
+                "spoken_response": "Toggled notification center",
+                "category": "omarchy"
+            }
+        if re.search(r"\b(task overview|overview|hyprtasking|tasks overview)\b", text):
+            return {
+                "status": "matched",
+                "intent": "toggle_overview",
+                "command": "hyprctl dispatch 'hl.plugin.hyprtasking.toggle(\"cursor\")'",
+                "spoken_response": "Toggled task overview",
+                "category": "hyprland"
+            }
+        if re.search(r"\b(open youtube|youtube kholo|play youtube)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_youtube",
+                "command": "omarchy launch browser https://youtube.com",
+                "spoken_response": "Opening YouTube",
+                "category": "apps"
+            }
+        if re.search(r"\b(open whatsapp|whatsapp kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_whatsapp",
+                "command": "omarchy launch browser https://web.whatsapp.com",
+                "spoken_response": "Opening WhatsApp",
+                "category": "apps"
+            }
+        if re.search(r"\b(open twitter|open x|x kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_twitter",
+                "command": "omarchy launch browser https://x.com",
+                "spoken_response": "Opening X",
+                "category": "apps"
+            }
+        if re.search(r"\b(open calendar|calendar kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_calendar",
+                "command": "omarchy launch browser https://calendar.google.com",
+                "spoken_response": "Opening Google Calendar",
+                "category": "apps"
+            }
+        if re.search(r"\b(open email|open gmail|mail kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_email",
+                "command": "omarchy launch browser https://mail.google.com",
+                "spoken_response": "Opening Gmail",
+                "category": "apps"
+            }
+        if re.search(r"\b(open obsidian|obsidian kholo)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_obsidian",
+                "command": "obsidian &",
+                "spoken_response": "Opening Obsidian",
+                "category": "apps"
+            }
+
+        # --- Continuous Listening Commands ---
+        if re.search(r"\b(start continuous listening|continuous mode|keep listening|always listen|continuous suno)\b", text):
+            return {
+                "status": "matched",
+                "intent": "start_continuous",
+                "command": "omarchy-assistant continuous start",
+                "spoken_response": "Continuous listening mode activated. I am listening freely, say stop listening when you want me to sleep.",
+                "category": "assistant"
+            }
+        if re.search(r"\b(stop continuous listening|stop listening|chup ho jao|go to sleep|sleep now|chup raho)\b", text):
+            return {
+                "status": "matched",
+                "intent": "stop_continuous",
+                "command": "omarchy-assistant continuous stop",
+                "spoken_response": "Going to sleep. Press Super plus A or say Hey Max whenever you need me.",
+                "category": "assistant"
+            }
+
         # --- Dictation & Typing ---
         m = re.search(r"^(type|write|dictate)\s+(.+)$", text)
         if m:
             dictated_content = m.group(2)
-            # Escape for shell safety
             escaped_text = dictated_content.replace("'", "'\\''")
             return {
                 "status": "matched",
@@ -436,23 +643,113 @@ class CommandRouter:
         return None
 
     def _fallback_llm(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Query LLM (Ollama or Groq/OpenAI) to interpret natural instructions."""
+        """Conversational AI engine for Max (offline smart rules + LLM)."""
+        clean = prompt.lower().strip()
+
+        # 1. Identity & Persona (Max)
+        if re.search(r"\b(who are you|tum kaun ho|what is your name|apna naam batao|tell me about yourself)\b", clean):
+            return {
+                "status": "llm",
+                "intent": "persona_identity",
+                "command": "",
+                "spoken_response": "I am Max, your personal voice assistant for Omarchy Linux. I can control your desktop, workspaces, windows, launch apps, record meetings, and answer your questions.",
+                "category": "ai"
+            }
+        if re.search(r"\b(what can you do|tum kya kar sakte ho|help me|features)\b", clean):
+            return {
+                "status": "llm",
+                "intent": "persona_capabilities",
+                "command": "",
+                "spoken_response": "You can ask me to open apps, switch workspaces, control volume and media, take screenshots, record meetings with transcription, or answer any question.",
+                "category": "ai"
+            }
+        if re.search(r"\b(how are you|kaise ho|kya haal hai)\b", clean):
+            return {
+                "status": "llm",
+                "intent": "smalltalk_status",
+                "command": "",
+                "spoken_response": "I am running at peak performance and ready to assist you!",
+                "category": "ai"
+            }
+        if re.search(r"\b(tell me a joke|koi joke sunao|make me laugh)\b", clean):
+            jokes = [
+                "Why do Linux users love the dark? Because light attracts bugs!",
+                "There are 10 types of people in the world: those who understand binary, and those who don't.",
+                "Why did the developer go broke? Because he used up all his cache!"
+            ]
+            import random
+            return {
+                "status": "llm",
+                "intent": "joke",
+                "command": "",
+                "spoken_response": random.choice(jokes),
+                "category": "ai"
+            }
+
+        # 2. Time and Date Queries
+        if re.search(r"\b(what time is it|time kya hai|kya time hua hai|current time)\b", clean):
+            import datetime
+            now_str = datetime.datetime.now().strftime("%I:%M %p")
+            return {
+                "status": "llm",
+                "intent": "current_time",
+                "command": "",
+                "spoken_response": f"It is currently {now_str}.",
+                "category": "ai"
+            }
+        if re.search(r"\b(what is today's date|today's date|aaj kaunsi tareekh hai|current date)\b", clean):
+            import datetime
+            now_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+            return {
+                "status": "llm",
+                "intent": "current_date",
+                "command": "",
+                "spoken_response": f"Today is {now_str}.",
+                "category": "ai"
+            }
+
+        # 3. Math & Quick Calculations
+        calc_match = re.search(r"(?:what is|calculate|solve)?\s*(\d+(?:\.\d+)?\s*[\+\-\*\/xX]\s*\d+(?:\.\d+)?)\b", clean)
+        if calc_match:
+            expr = calc_match.group(1).replace("x", "*").replace("X", "*")
+            try:
+                # Safe evaluation of basic math
+                val = eval(expr, {"__builtins__": None}, {})
+                return {
+                    "status": "llm",
+                    "intent": "calculator",
+                    "command": "",
+                    "spoken_response": f"The answer is {val}.",
+                    "category": "ai"
+                }
+            except Exception:
+                pass
+
+        # 4. System Specs & Battery
+        if re.search(r"\b(battery|battery level|battery percentage)\b", clean):
+            return {
+                "status": "llm",
+                "intent": "battery_status",
+                "command": "upower -i $(upower -e | grep 'BAT') 2>/dev/null | grep -E 'percentage|state' || echo 'No battery found'",
+                "spoken_response": "Checking battery status.",
+                "category": "system"
+            }
+
+        # 5. Cloud LLM (Groq / Ollama / OpenAI) if configured
         provider = self.config.get("llm_provider", "auto")
         groq_key = self.config.get("groq_api_key") or os.getenv("GROQ_API_KEY")
 
         system_instruction = (
-            "You are Omarchy Assistant, an intelligent voice assistant for Omarchy Linux (Arch Linux with Hyprland). "
-            "Given the user's voice command, return a JSON object with: "
-            "1. 'command': a safe, single-line bash command to execute (using hyprctl, omarchy, wpctl, playerctl, etc.). "
-            "If no OS command is needed, leave empty. "
-            "2. 'spoken_response': a short (1-2 sentence) voice response to say to the user. "
-            "Return strictly valid JSON only."
+            "You are Max, an ultra-smart, helpful personal AI assistant for Omarchy Linux (Arch Linux with Hyprland). "
+            "Respond concisely in 1 to 2 conversational sentences as speech feedback. "
+            "If the user asks to run an OS command, include a safe bash 'command'. "
+            "Return strictly valid JSON with keys: 'command' (string) and 'spoken_response' (string)."
         )
 
         if (provider == "groq" or provider == "auto") and groq_key:
             try:
                 payload = {
-                    "model": "llama-3.1-8b-instant",
+                    "model": "llama-3.3-70b-versatile",
                     "messages": [
                         {"role": "system", "content": system_instruction},
                         {"role": "user", "content": prompt}
@@ -473,7 +770,7 @@ class CommandRouter:
                     parsed = json.loads(content)
                     return {
                         "status": "llm",
-                        "intent": "natural_language_ai",
+                        "intent": "max_ai",
                         "command": parsed.get("command", ""),
                         "spoken_response": parsed.get("spoken_response", "Done."),
                         "category": "ai"
@@ -501,7 +798,7 @@ class CommandRouter:
                 parsed = json.loads(content)
                 return {
                     "status": "llm",
-                    "intent": "ollama_ai",
+                    "intent": "max_ollama",
                     "command": parsed.get("command", ""),
                     "spoken_response": parsed.get("spoken_response", "Done."),
                     "category": "ai"
@@ -509,4 +806,10 @@ class CommandRouter:
         except Exception:
             pass
 
-        return None
+        return {
+            "status": "matched",
+            "intent": "conversational",
+            "command": "",
+            "spoken_response": f"I heard '{prompt}'. I am Max, and I am here to help you.",
+            "category": "conversational"
+        }

@@ -17,6 +17,7 @@ Omarchy Voice Assistant — Hands-free voice control for Omarchy Linux
 
 Usage:
   omarchy-assistant listen                 Trigger voice listening cycle (push-to-talk)
+  omarchy-assistant continuous [start|stop] Hands-free continuous listening mode
   omarchy-assistant stop-listening        Cancel the active listening cycle
   omarchy-assistant exec "<command>"       Execute a voice command via text (dry-run/test)
   omarchy-assistant status                 Show daemon status and configuration
@@ -79,6 +80,32 @@ case "$cmd" in
         if is_daemon_running; then
             send_socket '{"action": "stop_listening"}'
         fi
+        ;;
+
+    continuous)
+        sub="${2:-toggle}"
+        if ! is_daemon_running; then
+            echo "[omarchy-assistant] Daemon not active. Launching daemon session..."
+            PYTHONPATH="$REPO_DIR" python3 -m daemon.main >/dev/null 2>&1 &
+            sleep 0.8
+        fi
+        case "$sub" in
+            start)
+                send_socket '{"action": "continuous_start"}'
+                ;;
+            stop)
+                send_socket '{"action": "continuous_stop"}'
+                ;;
+            toggle)
+                send_socket '{"action": "continuous_toggle"}'
+                ;;
+            status)
+                send_socket '{"action": "continuous_status"}'
+                ;;
+            *)
+                echo "Usage: omarchy-assistant continuous {start|stop|toggle|status}"
+                ;;
+        esac
         ;;
 
     exec|execute)

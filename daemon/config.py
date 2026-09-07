@@ -14,11 +14,13 @@ SOCKET_PATH = "/tmp/omarchy-assistant.sock"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     # Speech-to-Text configuration
-    # Options: "auto", "faster-whisper", "groq", "openai", "speech_recognition", "vosk", "mock"
-    "stt_backend": "auto",
-    "whisper_model": "base.en",
+    # Options: "whisper-cpp", "auto", "faster-whisper", "groq", "openai", "speech_recognition", "vosk", "mock"
+    "stt_backend": "whisper-cpp",
+    "language": "auto",
+    "whisper_model": "tiny",
     "whisper_device": "cpu",       # "cpu" or "cuda"
     "whisper_compute_type": "int8", # "int8", "float16", "default"
+    "assistant_name": "Max",
 
     # API Keys (can also be read from environment variables)
     "groq_api_key": "",
@@ -33,8 +35,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "min_record_seconds": 0.8,
 
     # Text-to-Speech & Feedback
-    "tts_enabled": False,
-    "tts_backend": "auto",          # "auto", "piper", "espeak-ng", "none"
+    "tts_enabled": True,
+    "tts_backend": "auto",          # "auto", "google", "piper", "espeak-ng", "none"
     "sound_feedback": True,         # Play start/stop chimes
     "notify_osd": True,             # Show desktop notifications
 
