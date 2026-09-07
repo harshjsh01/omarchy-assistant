@@ -65,6 +65,8 @@ cmd="${1:-listen}"
 
 case "$cmd" in
     listen|trigger)
+        echo "🎙️ I'm live, how may I assist you today?"
+        notify-send -a "Omarchy Voice Assistant" -i "dialog-information" -t 3000 "Omarchy Voice Assistant" "I'm live, how may I assist you today?" 2>/dev/null || true
         if ! is_daemon_running; then
             echo "[omarchy-assistant] Daemon not active. Launching daemon session..."
             PYTHONPATH="$REPO_DIR" python3 -m daemon.main >/dev/null 2>&1 &

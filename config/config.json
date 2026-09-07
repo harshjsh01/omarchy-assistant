@@ -1,6 +1,7 @@
 {
-  "stt_backend": "auto",
-  "whisper_model": "base.en",
+  "stt_backend": "whisper-cpp",
+  "language": "auto",
+  "whisper_model": "tiny",
   "whisper_device": "cpu",
   "whisper_compute_type": "int8",
   "groq_api_key": "",

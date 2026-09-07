@@ -102,7 +102,12 @@ class AssistantDaemon:
                 # 1. Update state: listening
                 self.state = "listening"
                 self.current_transcript = ""
-                self.executor.notify_quickshell("listening")
+                greeting = "I'm live, how may I assist you today?"
+                self.executor.notify_quickshell("listening", transcript=greeting)
+                self.executor.send_desktop_notification(
+                    {"intent": "assistant_ready", "spoken_response": greeting},
+                    success=True
+                )
                 if self.config.get("sound_feedback", True):
                     self.recorder.play_feedback_tone("start")
 

@@ -6,6 +6,9 @@ OpenAI Whisper API, SpeechRecognition (Google Free STT), and Whisper.cpp.
 
 import abc
 import os
+import re
+import subprocess
+from pathlib import Path
 from typing import Optional
 
 
@@ -163,6 +166,55 @@ class SpeechRecognitionEngine(BaseSTTEngine):
             return r.recognize_google(audio).strip()
 
 
+class WhisperCppEngine(BaseSTTEngine):
+    """Local offline multilingual Whisper engine via compiled whisper-cli."""
+
+    def __init__(self, binary_path: Optional[str] = None, model_path: Optional[str] = None, language: str = "auto"):
+        home = Path.home()
+        self.binary_path = binary_path or os.getenv("WHISPER_BIN") or str(home / ".local" / "bin" / "whisper-cli")
+
+        # Prefer multilingual model for English + Hindi / Hinglish support
+        default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.bin"
+        if not default_model.exists():
+            default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.en.bin"
+
+        self.model_path = model_path or os.getenv("WHISPER_MODEL_PATH") or str(default_model)
+        self.language = language
+
+    def is_available(self) -> bool:
+        return (
+            os.path.isfile(self.binary_path)
+            and os.access(self.binary_path, os.X_OK)
+            and os.path.isfile(self.model_path)
+        )
+
+    def transcribe(self, wav_path: str) -> str:
+        if not self.is_available():
+            return ""
+        try:
+            cmd = [
+                self.binary_path,
+                "-m", self.model_path,
+                "-f", wav_path,
+                "-nt",
+                "--no-prints",
+                "-l", self.language
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+            lines = []
+            for line in res.stdout.splitlines():
+                cleaned = line.strip()
+                if cleaned and not cleaned.startswith("[BLANK_AUDIO]") and not cleaned.startswith("["):
+                    lines.append(cleaned)
+                elif cleaned and "[" in cleaned and "]" in cleaned:
+                    no_brackets = re.sub(r"\[.*?\]", "", cleaned).strip()
+                    if no_brackets:
+                        lines.append(no_brackets)
+            return " ".join(lines).strip()
+        except Exception as e:
+            return ""
+
+
 class MockSTTEngine(BaseSTTEngine):
     """Test engine for offline development and simulation."""
 
@@ -176,6 +228,12 @@ class MockSTTEngine(BaseSTTEngine):
 def get_stt_engine(config: dict) -> BaseSTTEngine:
     """Factory to create appropriate STT backend."""
     backend = config.get("stt_backend", "auto").lower()
+
+    # 1. whisper.cpp local offline engine (fast, free, multilingual with Hindi/Hinglish)
+    if backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp", "auto"]:
+        engine = WhisperCppEngine(language=config.get("language", "auto"))
+        if engine.is_available() or backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp"]:
+            return engine
 
     if backend == "groq" or (backend == "auto" and config.get("groq_api_key")):
         engine = GroqWhisperEngine(config.get("groq_api_key"))

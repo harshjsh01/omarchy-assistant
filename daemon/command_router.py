@@ -50,8 +50,8 @@ class CommandRouter:
         }
 
     def _match_rules(self, text: str) -> Optional[Dict[str, Any]]:
-        # --- Audio & Volume ---
-        if re.search(r"\b(volume up|increase volume|louder|sound up)\b", text):
+        # --- Audio & Volume (English + Hindi/Hinglish) ---
+        if re.search(r"\b(volume up|increase volume|louder|sound up|awaaz badhao|awaz badhao|volume badhao|awaz badha do)\b", text):
             return {
                 "status": "matched",
                 "intent": "volume_up",
@@ -59,7 +59,7 @@ class CommandRouter:
                 "spoken_response": "Volume up",
                 "category": "audio"
             }
-        if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume)\b", text):
+        if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume|awaaz kam karo|awaz kam karo|volume kam karo|awaz dheemi karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "volume_down",
@@ -77,7 +77,7 @@ class CommandRouter:
                 "spoken_response": f"Volume set to {vol} percent",
                 "category": "audio"
             }
-        if re.search(r"\b(mute microphone|mute mic)\b", text):
+        if re.search(r"\b(mute microphone|mute mic|mic band karo|mike band karo|mic mute karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "mute_mic",
@@ -85,7 +85,7 @@ class CommandRouter:
                 "spoken_response": "Microphone muted",
                 "category": "audio"
             }
-        if re.search(r"\b(unmute microphone|unmute mic)\b", text):
+        if re.search(r"\b(unmute microphone|unmute mic|mic chalu karo|mic on karo|unmute mic karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "unmute_mic",
@@ -93,7 +93,7 @@ class CommandRouter:
                 "spoken_response": "Microphone unmuted",
                 "category": "audio"
             }
-        if re.search(r"\b(mute audio|mute sound|mute|unmute)\b", text):
+        if re.search(r"\b(mute audio|mute sound|mute|unmute|awaaz band karo|awaz band karo|chup karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "toggle_mute",
@@ -102,8 +102,8 @@ class CommandRouter:
                 "category": "audio"
             }
 
-        # --- Media Playback ---
-        if re.search(r"\b(pause music|pause video|pause playback|pause)\b", text):
+        # --- Media Playback (English + Hindi/Hinglish) ---
+        if re.search(r"\b(pause music|pause video|pause playback|pause|gaana roko|gana roko|roko)\b", text):
             return {
                 "status": "matched",
                 "intent": "media_pause",
@@ -111,7 +111,7 @@ class CommandRouter:
                 "spoken_response": "Paused",
                 "category": "media"
             }
-        if re.search(r"\b(play music|resume music|play track|play)\b", text):
+        if re.search(r"\b(play music|resume music|play track|play|gaana bajao|gana bajao|gaana chalao|gana chalao)\b", text):
             return {
                 "status": "matched",
                 "intent": "media_play",
@@ -119,7 +119,7 @@ class CommandRouter:
                 "spoken_response": "Playing",
                 "category": "media"
             }
-        if re.search(r"\b(next song|next track|skip song|skip track|next)\b", text):
+        if re.search(r"\b(next song|next track|skip song|skip track|next|agla gaana|agla gana)\b", text):
             return {
                 "status": "matched",
                 "intent": "media_next",
@@ -127,7 +127,7 @@ class CommandRouter:
                 "spoken_response": "Next track",
                 "category": "media"
             }
-        if re.search(r"\b(previous song|previous track|prev song|previous)\b", text):
+        if re.search(r"\b(previous song|previous track|prev song|previous|pichhla gaana|pichhla gana)\b", text):
             return {
                 "status": "matched",
                 "intent": "media_previous",
@@ -164,11 +164,15 @@ class CommandRouter:
                 "category": "display"
             }
 
-        # --- Hyprland Workspaces ---
-        m = re.search(r"\b(go to workspace|switch to workspace|workspace)\s*([0-9]|one|two|three|four|five|six|seven|eight|nine|ten)\b", text)
+        # --- Hyprland Workspaces (English + Hindi/Hinglish) ---
+        m = re.search(r"\b(go to workspace|switch to workspace|workspace|workspace par jao|workspace number)\s*([0-9]|one|two|three|four|five|six|seven|eight|nine|ten|ek|do|teen|char|paanch|chhe|saat|aath|nau|dus)\b", text)
         if m:
-            num_map = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
-                       "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10"}
+            num_map = {
+                "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+                "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+                "ek": "1", "do": "2", "teen": "3", "char": "4", "paanch": "5",
+                "chhe": "6", "saat": "7", "aath": "8", "nau": "9", "dus": "10"
+            }
             raw_target = m.group(2)
             target = num_map.get(raw_target, raw_target)
             return {
@@ -179,10 +183,14 @@ class CommandRouter:
                 "category": "hyprland"
             }
 
-        m = re.search(r"\b(move to workspace|send to workspace)\s*([0-9]|one|two|three|four|five|six|seven|eight|nine|ten)\b", text)
+        m = re.search(r"\b(move to workspace|send to workspace|workspace par bhejo)\s*([0-9]|one|two|three|four|five|six|seven|eight|nine|ten|ek|do|teen|char|paanch|chhe|saat|aath|nau|dus)\b", text)
         if m:
-            num_map = {"one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
-                       "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10"}
+            num_map = {
+                "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
+                "six": "6", "seven": "7", "eight": "8", "nine": "9", "ten": "10",
+                "ek": "1", "do": "2", "teen": "3", "char": "4", "paanch": "5",
+                "chhe": "6", "saat": "7", "aath": "8", "nau": "9", "dus": "10"
+            }
             raw_target = m.group(2)
             target = num_map.get(raw_target, raw_target)
             return {
@@ -193,8 +201,8 @@ class CommandRouter:
                 "category": "hyprland"
             }
 
-        # --- Hyprland Window Management ---
-        if re.search(r"\b(close window|close active window|close this window|kill window|close app)\b", text):
+        # --- Hyprland Window Management (English + Hindi/Hinglish) ---
+        if re.search(r"\b(close window|close active window|close this window|kill window|close app|window band karo|ye window band karo|isko band karo|band karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "close_window",
@@ -202,7 +210,7 @@ class CommandRouter:
                 "spoken_response": "Closing window",
                 "category": "hyprland"
             }
-        if re.search(r"\b(fullscreen|toggle fullscreen|full screen)\b", text):
+        if re.search(r"\b(fullscreen|toggle fullscreen|full screen|badi screen karo|fullscreen karo|bada karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "fullscreen",
@@ -210,7 +218,7 @@ class CommandRouter:
                 "spoken_response": "Fullscreen toggled",
                 "category": "hyprland"
             }
-        if re.search(r"\b(float window|floating window|toggle floating|toggle float)\b", text):
+        if re.search(r"\b(float window|floating window|toggle floating|toggle float|float karo|floating karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "toggle_floating",
@@ -218,7 +226,7 @@ class CommandRouter:
                 "spoken_response": "Toggled float",
                 "category": "hyprland"
             }
-        if re.search(r"\b(toggle split|split screen|split orientation)\b", text):
+        if re.search(r"\b(toggle split|split screen|split orientation|screen split karo|split karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "toggle_split",
@@ -257,8 +265,8 @@ class CommandRouter:
                 "category": "omarchy"
             }
 
-        # --- Screenshots & Capture ---
-        if re.search(r"\b(take screenshot|screenshot|capture screen|screen shot)\b", text):
+        # --- Screenshots & Capture (English + Hindi/Hinglish) ---
+        if re.search(r"\b(take screenshot|screenshot|capture screen|screen shot|screenshot lo|photo kheencho|screen capture karo|screenshot kheencho)\b", text):
             return {
                 "status": "matched",
                 "intent": "screenshot",
@@ -296,8 +304,8 @@ class CommandRouter:
                 "category": "omarchy"
             }
 
-        # --- Meeting Transcription (Omavoice + Omarvis Dual-Channel Capture) ---
-        if re.search(r"\b(start meeting transcription|start meeting record|record meeting|transcribe meeting|join meeting)\b", text):
+        # --- Meeting Transcription (Omavoice + Omarvis Dual-Channel Capture - English + Hindi) ---
+        if re.search(r"\b(start meeting transcription|start meeting record|record meeting|transcribe meeting|join meeting|meeting record karo|meeting shuru karo|meeting start karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "start_meeting_transcription",
@@ -305,7 +313,7 @@ class CommandRouter:
                 "spoken_response": "Meeting transcription started. Recording your microphone and speaker call audio.",
                 "category": "meeting"
             }
-        if re.search(r"\b(stop meeting transcription|stop meeting|end meeting|finish meeting|save meeting)\b", text):
+        if re.search(r"\b(stop meeting transcription|stop meeting|end meeting|finish meeting|save meeting|meeting band karo|meeting khatam karo|meeting roko)\b", text):
             return {
                 "status": "matched",
                 "intent": "stop_meeting_transcription",
@@ -322,8 +330,8 @@ class CommandRouter:
                 "category": "meeting"
             }
 
-        # --- Screen Awareness (Omarvis Feature) ---
-        if re.search(r"\b(what is on my screen|summarize my screen|look at my screen|describe my screen)\b", text):
+        # --- Screen Awareness (Omarvis Feature - English + Hindi) ---
+        if re.search(r"\b(what is on my screen|summarize my screen|look at my screen|describe my screen|screen par kya hai|screen dekh ke batao|screen par dekho)\b", text):
             return {
                 "status": "matched",
                 "intent": "screen_vision",
@@ -332,8 +340,8 @@ class CommandRouter:
                 "category": "vision"
             }
 
-        # --- Application Launching ---
-        if re.search(r"\b(open browser|launch browser|start browser|open chrome|open firefox)\b", text):
+        # --- Application Launching (English + Hindi/Hinglish) ---
+        if re.search(r"\b(open browser|launch browser|start browser|open chrome|open firefox|browser kholo|browser open karo|chrome kholo|internet kholo|browser chalao)\b", text):
             return {
                 "status": "matched",
                 "intent": "launch_browser",
@@ -341,7 +349,7 @@ class CommandRouter:
                 "spoken_response": "Opening browser",
                 "category": "apps"
             }
-        if re.search(r"\b(open terminal|launch terminal|start terminal|new terminal)\b", text):
+        if re.search(r"\b(open terminal|launch terminal|start terminal|new terminal|terminal kholo|terminal open karo|naya terminal|terminal chalao|terminal start karo)\b", text):
             return {
                 "status": "matched",
                 "intent": "launch_terminal",
@@ -349,7 +357,7 @@ class CommandRouter:
                 "spoken_response": "Opening terminal",
                 "category": "apps"
             }
-        if re.search(r"\b(open files|file manager|open nautilus|open file manager)\b", text):
+        if re.search(r"\b(open files|file manager|open nautilus|open file manager|files kholo|file manager kholo)\b", text):
             return {
                 "status": "matched",
                 "intent": "launch_files",
@@ -357,7 +365,7 @@ class CommandRouter:
                 "spoken_response": "Opening file manager",
                 "category": "apps"
             }
-        if re.search(r"\b(open code|launch code|open vscode|launch vscode)\b", text):
+        if re.search(r"\b(open code|launch code|open vscode|launch vscode|vs code kholo|code kholo)\b", text):
             return {
                 "status": "matched",
                 "intent": "launch_code",
@@ -365,7 +373,7 @@ class CommandRouter:
                 "spoken_response": "Opening VS Code",
                 "category": "apps"
             }
-        if re.search(r"\b(open btop|system monitor|task manager)\b", text):
+        if re.search(r"\b(open btop|system monitor|task manager|monitor kholo)\b", text):
             return {
                 "status": "matched",
                 "intent": "launch_btop",
