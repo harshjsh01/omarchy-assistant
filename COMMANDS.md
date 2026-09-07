@@ -8,9 +8,9 @@ This document catalogs the voice commands supported out-of-the-box by **Omarchy 
 
 | Voice Command | Action Taken | Subsystem Command |
 |---|---|---|
-| `"Switch to workspace 2"` / `"Go to workspace 2"` | Switches active workspace | `hyprctl dispatch workspace 2` |
-| `"Workspace 5"` | Direct workspace switch | `hyprctl dispatch workspace 5` |
-| `"Move to workspace 3"` / `"Send to workspace 3"` | Moves active window to workspace | `hyprctl dispatch movetoworkspace 3` |
+| `"Switch to workspace 2"` / `"Go to workspace 2"` | Switches active workspace | `hyprctl dispatch 'hl.dsp.focus({ workspace = "2" })'` |
+| `"Workspace 5"` | Direct workspace switch | `hyprctl dispatch 'hl.dsp.focus({ workspace = "5" })'` |
+| `"Move to workspace 3"` / `"Send to workspace 3"` | Moves active window to workspace | `hyprctl dispatch 'hl.dsp.window.move({ workspace = "3" })'` |
 
 *Supports numbers 1 through 10 (digits or words, e.g. "three").*
 
@@ -20,10 +20,10 @@ This document catalogs the voice commands supported out-of-the-box by **Omarchy 
 
 | Voice Command | Action Taken | Subsystem Command |
 |---|---|---|
-| `"Close window"` / `"Close active window"` / `"Kill window"` | Closes current window | `hyprctl dispatch killactive` |
-| `"Fullscreen"` / `"Toggle fullscreen"` | Expands window to fullscreen | `hyprctl dispatch fullscreen` |
-| `"Float window"` / `"Toggle floating"` | Toggles floating mode | `hyprctl dispatch togglefloating` |
-| `"Toggle split"` / `"Split screen"` | Switches split orientation | `hyprctl dispatch togglesplit` |
+| `"Close window"` / `"Close active window"` / `"Kill window"` | Closes current window (Protected from closing Agent chat) | `hyprctl dispatch 'hl.dsp.window.close()'` |
+| `"Fullscreen"` / `"Toggle fullscreen"` | Expands window to fullscreen | `hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = "fullscreen" })'` |
+| `"Float window"` / `"Toggle floating"` | Toggles floating mode | `hyprctl dispatch 'hl.dsp.window.float({ action = "toggle" })'` |
+| `"Toggle split"` / `"Split screen"` | Switches split orientation | `hyprctl dispatch 'hl.dsp.layout("togglesplit")'` |
 
 ---
 

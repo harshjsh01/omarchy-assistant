@@ -174,7 +174,7 @@ class CommandRouter:
             return {
                 "status": "matched",
                 "intent": "switch_workspace",
-                "command": f"hyprctl dispatch workspace {target}",
+                "command": f"hyprctl dispatch 'hl.dsp.focus({{ workspace = \"{target}\" }})'",
                 "spoken_response": f"Switched to workspace {target}",
                 "category": "hyprland"
             }
@@ -188,7 +188,7 @@ class CommandRouter:
             return {
                 "status": "matched",
                 "intent": "move_window_workspace",
-                "command": f"hyprctl dispatch movetoworkspace {target}",
+                "command": f"hyprctl dispatch 'hl.dsp.window.move({{ workspace = \"{target}\" }})'",
                 "spoken_response": f"Moved window to workspace {target}",
                 "category": "hyprland"
             }
@@ -198,7 +198,7 @@ class CommandRouter:
             return {
                 "status": "matched",
                 "intent": "close_window",
-                "command": "hyprctl dispatch killactive",
+                "command": "bash -c 'if ! hyprctl activewindow | grep -q \"class: org.omarchy.agent\"; then hyprctl dispatch \"hl.dsp.window.close()\"; else notify-send -a \"Omarchy Voice Assistant\" -i dialog-warning \"Protected Window\" \"Refusing to close active Antigravity Agent chat session\"; fi'",
                 "spoken_response": "Closing window",
                 "category": "hyprland"
             }
@@ -206,7 +206,7 @@ class CommandRouter:
             return {
                 "status": "matched",
                 "intent": "fullscreen",
-                "command": "hyprctl dispatch fullscreen",
+                "command": "hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = \"fullscreen\" })'",
                 "spoken_response": "Fullscreen toggled",
                 "category": "hyprland"
             }
@@ -214,7 +214,7 @@ class CommandRouter:
             return {
                 "status": "matched",
                 "intent": "toggle_floating",
-                "command": "hyprctl dispatch togglefloating",
+                "command": "hyprctl dispatch 'hl.dsp.window.float({ action = \"toggle\" })'",
                 "spoken_response": "Toggled float",
                 "category": "hyprland"
             }
@@ -222,7 +222,7 @@ class CommandRouter:
             return {
                 "status": "matched",
                 "intent": "toggle_split",
-                "command": "hyprctl dispatch togglesplit",
+                "command": "hyprctl dispatch 'hl.dsp.layout(\"togglesplit\")'",
                 "spoken_response": "Split layout toggled",
                 "category": "hyprland"
             }

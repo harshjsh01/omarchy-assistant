@@ -24,19 +24,38 @@ class ActionExecutor:
         output = ""
 
         if cmd:
+            is_async = (
+                action.get("category") == "apps"
+                or action.get("is_async", False)
+                or cmd.endswith("&")
+                or "omarchy launch" in cmd
+            )
+
             try:
-                # Run command in subshell
-                proc = subprocess.run(
-                    cmd,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=8
-                )
-                output = proc.stdout.strip() or proc.stderr.strip()
-                if proc.returncode != 0:
-                    success = False
+                if is_async:
+                    clean_cmd = cmd.rstrip("&").strip()
+                    subprocess.Popen(
+                        clean_cmd,
+                        shell=True,
+                        start_new_session=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL
+                    )
+                    success = True
+                    output = "Started asynchronously"
+                else:
+                    # Run synchronous command in subshell
+                    proc = subprocess.run(
+                        cmd,
+                        shell=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=5
+                    )
+                    output = proc.stdout.strip() or proc.stderr.strip()
+                    if proc.returncode != 0:
+                        success = False
             except Exception as e:
                 success = False
                 output = str(e)
