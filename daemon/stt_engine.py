@@ -258,7 +258,7 @@ class WhisperCppEngine(BaseSTTEngine):
                 "--no-prints",
                 "-l", self.language,
                 "-t", "4",
-                "--prompt", "Hey Max, OK Max, Hello Max, Hi Max, Max, हे मैक्स, नमस्ते मैक्स, सुनो मैक्स, मैक्स, play song on YouTube, YouTube, यूट्यूब, गाना चलाओ, गाना बजाओ, टर्मिनल खोलो, ब्राउज़र खोलो, वॉल्यूम बढ़ाओ, वॉल्यूम कम करो, Spotify, Seedhe Maut, song, songs, music, video, play, pause, resume, browser, Chromium, Antigravity, Omarchy, Hyprland, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation, remember, remind, reminder, memory, yaad, monitor, activity"
+                "--prompt", "Max, मैक्स, play song on YouTube, YouTube, यूट्यूब, गाना चलाओ, गाना बजाओ, टर्मिनल खोलो, ब्राउज़र खोलो, वॉल्यूम बढ़ाओ, वॉल्यूम कम करो, Spotify, Seedhe Maut, song, songs, music, video, play, pause, resume, browser, Chromium, Antigravity, Omarchy, Hyprland, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation, remember, remind, reminder, memory, yaad, monitor, activity"
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             lines = []

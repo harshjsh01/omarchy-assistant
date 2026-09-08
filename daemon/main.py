@@ -265,11 +265,12 @@ class AssistantDaemon:
 
     def _is_addressed_to_max(self, transcript: str) -> bool:
         """
-        Check if speech during continuous mode is directed at Max or is an intentional action/query.
+        Check if speech during continuous mode is directed at Max.
+        Only wakes up when 'Max' (or Hindi 'मैक्स') is explicitly addressed.
         """
         import re
         clean = transcript.lower().strip()
-        norm = re.sub(r"[^\w\s]", " ", clean).strip()
+        norm = re.sub(r"[^\w\s\u0900-\u097f]", " ", clean).strip()
         if not norm or len(norm.split()) == 0:
             return False
 
@@ -281,57 +282,23 @@ class AssistantDaemon:
         if any(re.search(p, clean, re.IGNORECASE) for p in stop_patterns):
             return True
 
-        # If user is in an active conversational window (within 30s of previous turn)
+        # If user is in an active conversational window (within 12s of previous turn)
         if time.time() < getattr(self, "_dialogue_active_until", 0.0):
             return True
 
-        # Wake phrases, names, and liveness inquiries (English, Hinglish, Devanagari Hindi)
-        wake_patterns = [
-            r"\b(hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|namaste\s+max|a\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max)\b",
+        # Wakeup MUST address Max: 'Max' or 'मैक्स' (with slight Whisper phonetic tolerance)
+        max_wake_patterns = [
             r"\bmax\b",
-            r"(हे\s*मैक्स|मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स|हेलो\s*मैक्स|हाय\s*मैक्स)",
-            r"\b(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho|kya\s+tum\s+zinda\s+ho|kya\s+tum\s+sun\s+rahe\s+ho)\b",
-            r"(क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो|मेरी\s*आवाज़\s*आ\s*रही\s*है)"
+            r"(मैक्स|हे\s*मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स)",
+            r"\b(hey\s+max|ok\s+max|hi\s+max|hello\s+max|suno\s+max|arrey\s+max)\b",
+            # Whisper phonetic variations if it mishears the single syllable 'max'
+            r"\b(marks|macs|kmax|he\s+makes|hay\s+max)\b",
+            r"\b(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho)\b",
+            r"(क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो)"
         ]
-        for pat in wake_patterns:
+        for pat in max_wake_patterns:
             if re.search(pat, clean, re.IGNORECASE):
                 return True
-
-        # Direct action and control commands (English + Hinglish + Devanagari Hindi)
-        action_keywords = [
-            "open", "launch", "play", "pause", "resume", "stop", "close", "kill",
-            "volume", "mute", "unmute", "brightness", "switch", "workspace",
-            "screenshot", "capture", "run", "start", "remember", "remind", "reminder",
-            "monitor", "activity", "background", "status", "process", "task", "health",
-            "kholo", "band", "chalao", "bajao", "roko", "badhao", "kam karo", "dikhao",
-            "yaad", "kaam", "dekh", "sun", "sunao", "lagao", "karo", "likho", "bhejo",
-            # Devanagari action keywords
-            "खोलो", "खोल", "चलाओ", "चला", "बजाओ", "बजा", "लगाओ", "लगा", "रोको", "रोक",
-            "बंद", "बढ़ाओ", "कम", "दिखाओ", "बताओ", "सुनाओ", "करो", "याद", "स्क्रीनशॉट",
-            "यूट्यूब", "गाना", "गीत", "वीडियो", "टर्मिनल", "ब्राउज़र", "वॉल्यूम", "आवाज़"
-        ]
-        for k in action_keywords:
-            if re.search(rf"\b{re.escape(k)}\b", clean, re.IGNORECASE) or k in clean:
-                return True
-
-        # Complex reasoning/brainstorming/coding queries intended for AI (English + Hindi)
-        complex_keywords = [
-            "brainstorm", "project", "idea", "plan", "build", "create", "code", "develop",
-            "documentation", "docs", "write", "design", "system", "architecture", "script",
-            "how", "why", "what", "who", "where", "when", "can you", "could you", "tell me",
-            "explain", "help", "think", "suggest", "search for",
-            "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao",
-            # Devanagari query keywords
-            "क्या", "क्यों", "कैसे", "कहाँ", "कब", "कौन", "किसे", "कितना", "बताओ", "बनाओ", "सोचो", "समझाओ", "सिखाओ", "मदद"
-        ]
-        words = clean.split()
-        if any(k in clean.lower() for k in complex_keywords) and len(words) >= 2:
-            return True
-
-        # Any substantial Hindi utterance in Devanagari (>= 2 words)
-        has_devanagari = bool(re.search(r"[\u0900-\u097f]", clean))
-        if has_devanagari and len(words) >= 2:
-            return True
 
         return False
 
@@ -408,22 +375,22 @@ class AssistantDaemon:
                 if any(p in clean_lower for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
                     self.continuous_mode = False
                     self.recorder.stop_continuous_stream()
-                    bye = "Continuous listening stopped. Say Hey Max when you need me."
+                    bye = "Continuous listening stopped. Say Max when you need me."
                     self.set_state("speaking", transcript=transcript, action_desc=bye)
                     if self.tts.enabled:
                         self.tts.speak(bye, wait=True)
                     self.set_state("idle")
                     break
 
-                # In continuous mode: only route speech if addressed to Max or an intentional command/query
+                # In continuous mode: only route speech if addressed to Max
                 if not self._is_addressed_to_max(transcript):
                     print(f"[omarchy-assistant] [Continuous] Ignored non-command speech in standby: '{transcript}'")
                     self.set_state("continuous_standby")
                     time.sleep(0.05)
                     continue
 
-                # Refresh dialogue active timer (30 seconds for natural follow-ups without repeating Hey Max)
-                self._dialogue_active_until = time.time() + 30.0
+                # Refresh dialogue active timer (12 seconds for natural follow-ups without repeating Max)
+                self._dialogue_active_until = time.time() + 12.0
 
                 # 4. Route intent
                 action = self.router.route(transcript)

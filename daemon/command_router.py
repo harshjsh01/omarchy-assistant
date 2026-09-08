@@ -41,8 +41,8 @@ class CommandRouter:
                 "category": "none"
             }
 
-        # Normalize text by stripping punctuation for exact phrase/greeting matching
-        norm_text = re.sub(r"[^\w\s]", " ", clean_text).strip()
+        # Normalize text by stripping punctuation for exact phrase/greeting matching (preserving Devanagari)
+        norm_text = re.sub(r"[^\w\s\u0900-\u097f]", " ", clean_text).strip()
         norm_text = re.sub(r"\s+", " ", norm_text)
 
         # 1. Internal Daemon Controls
@@ -56,9 +56,9 @@ class CommandRouter:
                 "category": "ai"
             }
 
-        # 2. Fast direct liveness / greeting checks (instant response without waiting)
-        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs|kmax|he\s+makes|hey|hello|hi|हे\s*मैक्स|मैक्स|नमस्ते\s*मैक्स|सुनो\s*मैक्स|नमस्ते|प्रणाम|हाय|हेलो)$", norm_text):
-            spoken = "हाँ, मैं सुन रहा हूँ। कहिए, क्या काम है?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes, I am live. What would you like to do?"
+        # 2. Fast direct liveness / greeting checks (instant response when user simply calls "Max")
+        if re.search(r"^(max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|suno\s+max|marks|macs|kmax|he\s+makes|हे\s*मैक्स|सुनो\s*मैक्स)$", norm_text):
+            spoken = "हाँ, कहिए?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes, I am listening."
             return {
                 "status": "matched",
                 "intent": "greeting",
@@ -79,7 +79,7 @@ class CommandRouter:
 
         # Strip leading wake words (English, Hinglish, Devanagari)
         stripped_prompt = re.sub(
-            r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max|हे\s*मैक्स|मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स)[,\s]+",
+            r"^(max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max|हे\s*मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स)[,\s]+",
             "",
             clean_text,
             flags=re.IGNORECASE
@@ -869,7 +869,7 @@ class CommandRouter:
                 "status": "matched",
                 "intent": "stop_continuous",
                 "command": "omarchy-assistant continuous stop",
-                "spoken_response": "Going to sleep. Press Super plus A or say Hey Max whenever you need me.",
+                "spoken_response": "Going to sleep. Say Max whenever you need me.",
                 "category": "assistant"
             }
         # --- Chat Session Management ---
