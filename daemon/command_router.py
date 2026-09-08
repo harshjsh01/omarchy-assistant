@@ -58,22 +58,20 @@ class CommandRouter:
 
         # 2. Fast direct liveness / greeting checks (instant response when user simply calls "Bro" or "Max")
         if re.search(r"^(bro|ब्रो|भाई|hey\s+bro|ok\s+bro|hello\s+bro|hi\s+bro|yo\s+bro|suno\s+bro|हे\s*ब्रो|सुनो\s*ब्रो|नमस्ते\s*ब्रो|सुनो\s*भाई|max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|suno\s+max|marks|macs|kmax|he\s+makes|हे\s*मैक्स|सुनो\s*मैक्स)$", norm_text):
-            spoken = "हाँ भाई, बोलो?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes bro, I'm listening."
             return {
                 "status": "matched",
                 "intent": "greeting",
                 "command": "",
-                "spoken_response": spoken,
+                "spoken_response": "Yes bro, I'm listening.",
                 "category": "conversational"
             }
 
         if re.search(r"^(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho|क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो)$", norm_text):
-            spoken = "हाँ भाई, मैं बिल्कुल लाइव और तैयार हूँ। बोलो क्या काम है?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes bro, I am live and listening! What's up?"
             return {
                 "status": "matched",
                 "intent": "liveness_check",
                 "command": "",
-                "spoken_response": spoken,
+                "spoken_response": "Yes bro, I am live and listening! What's up?",
                 "category": "conversational"
             }
 
@@ -115,21 +113,19 @@ class CommandRouter:
         # --- Audio & Volume (English + Hindi/Hinglish) ---
         # --- Audio & Volume (English + Hindi/Hinglish + Devanagari) ---
         if re.search(r"\b(volume up|increase volume|louder|sound up|aa?wa?a?[zj] badhao|volume badhao|aa?wa?a?[zj] badha do|aawaz badhao)\b|(वॉल्यूम\s*बढ़ाओ|आवाज़\s*बढ़ाओ|आवाज़\s*तेज़\s*करो|साउंड\s*बढ़ाओ)", text, re.IGNORECASE):
-            spoken = "वॉल्यूम बढ़ा दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Volume up"
             return {
                 "status": "matched",
                 "intent": "volume_up",
                 "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
-                "spoken_response": spoken,
+                "spoken_response": "Volume up",
                 "category": "audio"
             }
         if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume|aa?wa?a?[zj] kam karo|volume kam karo|aa?wa?a?[zj] dheemi karo|aawaz kam karo)\b|(वॉल्यूम\s*कम\s*करो|आवाज़\s*कम\s*करो|आवाज़\s*धीमी\s*करो|साउंड\s*कम\s*करो)", text, re.IGNORECASE):
-            spoken = "वॉल्यूम कम कर दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Volume down"
             return {
                 "status": "matched",
                 "intent": "volume_down",
                 "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
-                "spoken_response": spoken,
+                "spoken_response": "Volume down",
                 "category": "audio"
             }
         m = re.search(r"\b(set volume to|volume)\s*(\d{1,3})\s*(percent|%)?\b", text)
@@ -159,12 +155,11 @@ class CommandRouter:
                 "category": "audio"
             }
         if re.search(r"\b(mute audio|mute sound|mute|unmute|aa?wa?a?[zj] band karo|chup karo)\b|(वॉल्यूम\s*बंद\s*करो|आवाज़\s*बंद\s*करो|म्यूट\s*करो)", text, re.IGNORECASE):
-            spoken = "म्यूट टॉगल कर दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Toggled mute"
             return {
                 "status": "matched",
                 "intent": "toggle_mute",
                 "command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-                "spoken_response": spoken,
+                "spoken_response": "Toggled mute",
                 "category": "audio"
             }
 
@@ -180,21 +175,19 @@ class CommandRouter:
 
         # --- Terminal & Browser Launches ---
         if re.search(r"\b(open terminal|terminal kholo|launch terminal)\b|(टर्मिनल\s*खोलो|टर्मिनल\s*चलाओ|टर्मिनल\s*ऑन\s*करो)", text, re.IGNORECASE):
-            spoken = "टर्मिनल खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening terminal"
             return {
                 "status": "matched",
                 "intent": "open_terminal",
                 "command": "omarchy launch terminal",
-                "spoken_response": spoken,
+                "spoken_response": "Opening terminal",
                 "category": "apps"
             }
         if re.search(r"\b(open browser|browser kholo|launch browser)\b|(ब्राउज़र\s*खोलो|ब्राउज़र\s*चलाओ)", text, re.IGNORECASE):
-            spoken = "ब्राउज़र खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening browser"
             return {
                 "status": "matched",
                 "intent": "open_browser",
                 "command": "omarchy launch browser",
-                "spoken_response": spoken,
+                "spoken_response": "Opening browser",
                 "category": "apps"
             }
 
@@ -221,31 +214,28 @@ class CommandRouter:
             import urllib.parse
             if query:
                 encoded = urllib.parse.quote_plus(query)
-                spoken = f"यूट्यूब पर {query} चला रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else f"Playing {query} on YouTube"
                 return {
                     "status": "matched",
                     "intent": "play_youtube",
                     "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
-                    "spoken_response": spoken,
+                    "spoken_response": f"Playing {query} on YouTube",
                     "category": "apps"
                 }
             else:
-                spoken = "यूट्यूब खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening YouTube"
                 return {
                     "status": "matched",
                     "intent": "open_youtube",
                     "command": "omarchy launch browser 'https://youtube.com'",
-                    "spoken_response": spoken,
+                    "spoken_response": "Opening YouTube",
                     "category": "apps"
                 }
 
         if re.search(r"\b(open youtube|youtube kholo|play youtube|launch youtube)\b|(यूट्यूब\s*खोलो|यूट्यूब\s*चलाओ|ओपन\s*यूट्यूब)", text, re.IGNORECASE):
-            spoken = "यूट्यूब खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening YouTube"
             return {
                 "status": "matched",
                 "intent": "open_youtube",
                 "command": "omarchy launch browser 'https://youtube.com'",
-                "spoken_response": spoken,
+                "spoken_response": "Opening YouTube",
                 "category": "apps"
             }
 
@@ -291,7 +281,7 @@ class CommandRouter:
                     "status": "matched",
                     "intent": "play_youtube",
                     "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
-                    "spoken_response": f"यूट्यूब पर {target} का गाना चला रहा हूँ।",
+                    "spoken_response": f"Playing {target} on YouTube",
                     "category": "apps"
                 }
             else:
@@ -299,7 +289,7 @@ class CommandRouter:
                     "status": "matched",
                     "intent": "play_youtube",
                     "command": "omarchy launch browser 'https://www.youtube.com/results?search_query=top+hindi+songs'",
-                    "spoken_response": "यूट्यूब पर गाने चला रहा हूँ।",
+                    "spoken_response": "Playing songs on YouTube",
                     "category": "apps"
                 }
 
@@ -333,32 +323,29 @@ class CommandRouter:
             if target.lower() not in ["gaana", "gana", "music", "song", "audio", ""]:
                 import urllib.parse
                 encoded = urllib.parse.quote_plus(target + " song")
-                spoken = f"यूट्यूब पर {target} चला रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else f"Playing {target} on YouTube"
                 return {
                     "status": "matched",
                     "intent": "play_youtube",
                     "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
-                    "spoken_response": spoken,
+                    "spoken_response": f"Playing {target} on YouTube",
                     "category": "apps"
                 }
 
         # --- Media Playback Controls (ONLY for toggling currently playing audio) ---
         if re.search(r"^(pause|pause music|pause video|pause playback|stop playback|gaana roko|gana roko|roko|गाना\s*रोको|रोको|पॉज़\s*करो|बंद\s*करो)$", text):
-            spoken = "पॉज़ कर दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Paused"
             return {
                 "status": "matched",
                 "intent": "media_pause",
                 "command": "playerctl pause 2>/dev/null || true",
-                "spoken_response": spoken,
+                "spoken_response": "Paused",
                 "category": "media"
             }
         if re.search(r"^(play|resume|play music|resume music|play track|resume track|continue playback|gaana bajao|gana bajao|gaana chalao|gana chalao|गाना\s*चलाओ|चलाओ|बजाओ|रिज्यूम\s*करो)$", text):
-            spoken = "प्ले कर रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Playing"
             return {
                 "status": "matched",
                 "intent": "media_play",
                 "command": "playerctl play-pause 2>/dev/null || true",
-                "spoken_response": spoken,
+                "spoken_response": "Playing",
                 "category": "media"
             }
         if re.search(r"\b(next song|next track|skip song|skip track|next|agla gaana|agla gana)\b", text):

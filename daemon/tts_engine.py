@@ -85,21 +85,15 @@ class TTSEngine:
             return False
 
     def _speak_piper(self, clean: str) -> bool:
-        """Synthesize local neural speech via Piper using local ONNX models."""
+        """Synthesize local neural speech via Piper using local English ONNX model (Ryan)."""
         piper_bin = shutil.which("piper") or os.path.expanduser("~/.local/bin/piper")
         if not piper_bin or not os.path.exists(piper_bin):
             return False
 
-        # Detect Hindi characters
-        has_hindi = any("\u0900" <= c <= "\u097F" for c in clean)
+        # Strictly English local voice
         models_dir = os.path.expanduser("~/.local/share/piper/models")
+        model_path = os.path.join(models_dir, "en_US-ryan-medium.onnx")
 
-        if has_hindi:
-            model_path = os.path.join(models_dir, "hi_IN-rohan-medium.onnx")
-        else:
-            model_path = os.path.join(models_dir, "en_US-ryan-medium.onnx")
-
-        # Fallback if specific model not found
         if not os.path.exists(model_path):
             available = [f for f in os.listdir(models_dir) if f.endswith(".onnx")] if os.path.exists(models_dir) else []
             if available:
