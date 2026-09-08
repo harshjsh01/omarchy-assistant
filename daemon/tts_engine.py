@@ -84,6 +84,56 @@ class TTSEngine:
             print(f"[omarchy-assistant] Sarvam TTS warning: {e}", file=sys.stderr)
             return False
 
+    def _speak_piper(self, clean: str) -> bool:
+        """Synthesize local neural speech via Piper using local ONNX models."""
+        piper_bin = shutil.which("piper") or os.path.expanduser("~/.local/bin/piper")
+        if not piper_bin or not os.path.exists(piper_bin):
+            return False
+
+        # Detect Hindi characters
+        has_hindi = any("\u0900" <= c <= "\u097F" for c in clean)
+        models_dir = os.path.expanduser("~/.local/share/piper/models")
+
+        if has_hindi:
+            model_path = os.path.join(models_dir, "hi_IN-rohan-medium.onnx")
+        else:
+            model_path = os.path.join(models_dir, "en_US-ryan-medium.onnx")
+
+        # Fallback if specific model not found
+        if not os.path.exists(model_path):
+            available = [f for f in os.listdir(models_dir) if f.endswith(".onnx")] if os.path.exists(models_dir) else []
+            if available:
+                model_path = os.path.join(models_dir, available[0])
+            else:
+                return False
+
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
+            wav_path = f_wav.name
+
+        try:
+            p = subprocess.Popen(
+                [piper_bin, "--model", model_path, "--output-file", wav_path],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                text=True
+            )
+            p.communicate(input=clean, timeout=10)
+            if p.returncode == 0 and os.path.exists(wav_path) and os.path.getsize(wav_path) > 100:
+                player = "pw-play" if shutil.which("pw-play") else "aplay"
+                subprocess.run([player, wav_path], timeout=15, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True
+            return False
+        except Exception as e:
+            print(f"[omarchy-assistant] Piper TTS error: {e}", file=sys.stderr)
+            return False
+        finally:
+            if os.path.exists(wav_path):
+                try:
+                    os.unlink(wav_path)
+                except OSError:
+                    pass
+
     def _speak_worker(self, text: str) -> None:
         """Fetch and play audio over speakers."""
         # Clean text for speech synthesis
@@ -91,12 +141,22 @@ class TTSEngine:
         if not clean:
             return
 
-        # 1. High Quality: Sarvam AI Indian Voices (bulbul:v3 - Aditya, Shubh, Ratan, Kabir)
+        # 1. Dedicated Local Engine: Piper TTS (100% offline, zero cloud API)
+        if self.backend in ["piper", "local"]:
+            if self._speak_piper(clean):
+                return
+
+        # 2. Sarvam AI Indian Voices (bulbul:v3 - Aditya, Shubh, Ratan, Kabir)
         if self.backend in ["sarvam", "auto"]:
             if self._speak_sarvam(clean):
                 return
 
-        # 2. Online fallback: Google TTS via PipeWire / ALSA
+        # 3. Piper fallback if backend was auto
+        if self.backend == "auto":
+            if self._speak_piper(clean):
+                return
+
+        # 4. Online fallback: Google TTS via PipeWire / ALSA
         if self.backend in ["google", "auto"]:
             try:
                 # Detect Hindi characters or phrases
@@ -133,21 +193,7 @@ class TTSEngine:
             except Exception:
                 pass
 
-        # 2. Offline fallback: Piper TTS
-        if self.backend in ["piper", "auto"] and shutil.which("piper"):
-            try:
-                subprocess.run(
-                    f"echo '{clean}' | piper --output-raw | aplay -r 22050 -f S16_LE -t raw -",
-                    shell=True,
-                    timeout=5,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                return
-            except Exception:
-                pass
-
-        # 3. Offline fallback: espeak-ng
+        # 5. Offline fallback: espeak-ng
         if shutil.which("espeak-ng"):
             try:
                 subprocess.run(["espeak-ng", "-s", "175", clean], timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -155,7 +201,7 @@ class TTSEngine:
             except Exception:
                 pass
 
-        # 4. Offline fallback: spd-say
+        # 6. Offline fallback: spd-say
         if shutil.which("spd-say"):
             try:
                 subprocess.run(["spd-say", clean], timeout=5, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
