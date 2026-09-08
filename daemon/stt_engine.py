@@ -166,15 +166,67 @@ class SpeechRecognitionEngine(BaseSTTEngine):
             return r.recognize_google(audio).strip()
 
 
+class SarvamSTTEngine(BaseSTTEngine):
+    """Sarvam AI Saaras:v2 multilingual STT for Indian English, Hindi & Hinglish."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.getenv("SARVAM_API_KEY", "")
+
+    def is_available(self) -> bool:
+        return bool(self.api_key)
+
+    def transcribe(self, wav_path: str) -> str:
+        import urllib.request
+        import json
+        import sys
+
+        boundary = "----SarvamMultipartBoundary"
+        with open(wav_path, "rb") as f:
+            audio_bytes = f.read()
+
+        body = bytearray()
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(b'Content-Disposition: form-data; name="model"\r\n\r\n')
+        body.extend(b"saaras:v2\r\n")
+
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(b'Content-Disposition: form-data; name="language_code"\r\n\r\n')
+        body.extend(b"unknown\r\n")
+
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(b'Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n')
+        body.extend(b"Content-Type: audio/wav\r\n\r\n")
+        body.extend(audio_bytes)
+        body.extend(f"\r\n--{boundary}--\r\n".encode())
+
+        req = urllib.request.Request(
+            "https://api.sarvam.ai/speech-to-text",
+            data=bytes(body),
+            headers={
+                "api-subscription-key": self.api_key,
+                "Content-Type": f"multipart/form-data; boundary={boundary}"
+            }
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                data = json.loads(resp.read().decode())
+                return data.get("transcript", "").strip()
+        except Exception as e:
+            print(f"[omarchy-assistant] Sarvam AI STT error: {e}", file=sys.stderr)
+            return ""
+
+
 class WhisperCppEngine(BaseSTTEngine):
-    """Local offline multilingual Whisper engine via compiled whisper-cli."""
+    """Local offline multilingual Whisper engine via compiled whisper-cli with prompt biasing."""
 
     def __init__(self, binary_path: Optional[str] = None, model_path: Optional[str] = None, language: str = "auto"):
         home = Path.home()
         self.binary_path = binary_path or os.getenv("WHISPER_BIN") or str(home / ".local" / "bin" / "whisper-cli")
 
-        # Prefer multilingual model for English + Hindi / Hinglish support
-        default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.bin"
+        # Prefer high-accuracy base model for English + Hindi / Hinglish support
+        default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-base.bin"
+        if not default_model.exists():
+            default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.bin"
         if not default_model.exists():
             default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.en.bin"
 
@@ -198,9 +250,11 @@ class WhisperCppEngine(BaseSTTEngine):
                 "-f", wav_path,
                 "-nt",
                 "--no-prints",
-                "-l", self.language
+                "-l", self.language,
+                "-t", "4",
+                "--prompt", "Max, Antigravity, Omarchy, Hyprland, agy, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation"
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=12)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             lines = []
             for line in res.stdout.splitlines():
                 cleaned = line.strip()
@@ -229,20 +283,28 @@ def get_stt_engine(config: dict) -> BaseSTTEngine:
     """Factory to create appropriate STT backend."""
     backend = config.get("stt_backend", "auto").lower()
 
-    # 1. whisper.cpp local offline engine (fast, free, multilingual with Hindi/Hinglish)
-    if backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp", "auto"]:
-        engine = WhisperCppEngine(language=config.get("language", "auto"))
-        if engine.is_available() or backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp"]:
+    # 1. Check Sarvam AI if requested or configured with API key
+    if backend == "sarvam" or (backend == "auto" and config.get("sarvam_api_key")):
+        engine = SarvamSTTEngine(config.get("sarvam_api_key"))
+        if engine.is_available():
             return engine
 
+    # 2. Check Groq Cloud if requested or configured
     if backend == "groq" or (backend == "auto" and config.get("groq_api_key")):
         engine = GroqWhisperEngine(config.get("groq_api_key"))
         if engine.is_available():
             return engine
 
+    # 3. Check OpenAI Whisper API
     if backend == "openai" or (backend == "auto" and config.get("openai_api_key")):
         engine = OpenAIWhisperEngine(config.get("openai_api_key"))
         if engine.is_available():
+            return engine
+
+    # 4. Local offline whisper.cpp (fast, free, multilingual base model with prompt biasing)
+    if backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp", "auto"]:
+        engine = WhisperCppEngine(language=config.get("language", "auto"))
+        if engine.is_available() or backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp"]:
             return engine
 
     if backend in ["faster-whisper", "auto"]:

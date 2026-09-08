@@ -396,6 +396,16 @@ class CommandRouter:
                 "spoken_response": "Opening system monitor",
                 "category": "apps"
             }
+        # --- Antigravity AI Agent (English + Hindi/Hinglish + phonetic mishearing tolerance) ---
+        if re.search(r"\b(launch|open|start|run)?\s*(antigravity|anti\s*gravity|agy|integrity)\b", text) or \
+           re.search(r"\b(antigravity|anti\s*gravity|agy|integrity)\s*(kholo|chalao|start karo|open karo)?\b", text):
+            return {
+                "status": "matched",
+                "intent": "launch_antigravity",
+                "command": "omarchy launch or focus tui --app-id=org.omarchy.agent agy",
+                "spoken_response": "Launching Antigravity AI Agent",
+                "category": "apps"
+            }
 
         # --- Omarchy System Operations ---
         if re.search(r"\b(lock screen|lock pc|lock computer|lock system)\b", text):
@@ -601,6 +611,23 @@ class CommandRouter:
                 "category": "apps"
             }
 
+        # --- Generic Application Launching (open <app> / launch <app> / <app> kholo) ---
+        m = re.search(r"^(open|launch|start)\s+([a-zA-Z0-9_\-\.\+]+)$", text)
+        if not m:
+            m = re.search(r"^([a-zA-Z0-9_\-\.\+]+)\s+(kholo|chalao|open karo|launch karo)$", text)
+        if m:
+            target_app = m.group(2) if m.group(1) in ["open", "launch", "start"] else m.group(1)
+            target_lower = target_app.lower()
+            if target_lower not in ["the", "a", "an", "window", "terminal", "browser", "chat", "menu", "sound", "volume", "music", "integrity", "antigravity"]:
+                clean_target = target_app.replace("'", "").replace("\"", "")
+                return {
+                    "status": "matched",
+                    "intent": "launch_generic_app",
+                    "command": f"bash -c 'omarchy launch or focus \"{clean_target}\" \"{clean_target}\" 2>/dev/null || gtk-launch {clean_target} 2>/dev/null || {clean_target} &'",
+                    "spoken_response": f"Opening {target_app}",
+                    "category": "apps"
+                }
+
         # --- Continuous Listening Commands ---
         if re.search(r"\b(start continuous listening|continuous mode|keep listening|always listen|continuous suno)\b", text):
             return {
@@ -779,17 +806,29 @@ class CommandRouter:
             if agy_bin and os.path.exists(agy_bin):
                 active_conv = self._get_active_conversation_id()
 
-                cmd = [agy_bin, "--effort", "low", "--output-format", "json", "--print", prompt]
+                # Dynamic reasoning effort based on task complexity (brainstorming, coding, planning)
+                is_complex = bool(re.search(r"\b(brainstorm|project|idea|plan|documentation|docs|build|create\s+folder|architecture|code|develop|create|system|design)\b", clean))
+                effort = "high" if is_complex else self.config.get("reasoning_effort", "medium")
+
+                # Auto-approve tool permissions so Max can autonomously create folders, docs, and run commands
+                cmd = [
+                    agy_bin,
+                    "--effort", effort,
+                    "--dangerously-skip-permissions",
+                    "--output-format", "json",
+                    "--print", prompt
+                ]
                 if active_conv:
                     cmd.insert(1, "--conversation")
                     cmd.insert(2, active_conv)
 
+                timeout_sec = 65 if is_complex else 35
                 res = subprocess.run(
                     cmd,
                     cwd=chat_dir,
                     capture_output=True,
                     text=True,
-                    timeout=35
+                    timeout=timeout_sec
                 )
                 if res.returncode == 0 and res.stdout.strip():
                     ans = ""
@@ -806,13 +845,38 @@ class CommandRouter:
 
                     if ans.startswith("Output:"):
                         ans = ans[7:].strip()
-                    # Clean markdown symbols for cleaner TTS
-                    ans_clean = ans.replace("**", "").replace("##", "").replace("`", "").strip()
+
+                    # Save full detailed response/plan to disk
+                    try:
+                        with open(os.path.join(chat_dir, "last_response.md"), "w", encoding="utf-8") as f_out:
+                            f_out.write(ans)
+                    except Exception:
+                        pass
+
+                    # Extract spoken voice summary if formatted with [Spoken Summary]:
+                    spoken_text = ""
+                    if "[Spoken Summary]:" in ans:
+                        spoken_text = ans.split("[Spoken Summary]:")[-1].strip()
+                    elif "[spoken summary]:" in ans.lower():
+                        idx = ans.lower().find("[spoken summary]:")
+                        spoken_text = ans[idx + len("[spoken summary]:"):].strip()
+                    else:
+                        # Clean markdown formatting for speech
+                        clean_voice = re.sub(r"```.*?```", "", ans, flags=re.DOTALL)
+                        clean_voice = re.sub(r"[*#`_\[\]>]", "", clean_voice).strip()
+                        # If the answer is long (e.g. documentation or deep brainstorming), speak the overview
+                        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean_voice) if s.strip()]
+                        if len(sentences) > 3:
+                            spoken_text = " ".join(sentences[:2]) + " I have detailed the full documentation and files in your workspace."
+                        else:
+                            spoken_text = clean_voice
+
+                    spoken_text = spoken_text.replace("\n", " ").strip()
                     return {
                         "status": "matched",
                         "intent": "max_antigravity_ai",
                         "command": "",
-                        "spoken_response": ans_clean,
+                        "spoken_response": spoken_text,
                         "category": "ai"
                     }
         except Exception as e:

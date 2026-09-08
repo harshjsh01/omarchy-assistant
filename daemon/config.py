@@ -14,18 +14,20 @@ SOCKET_PATH = "/tmp/omarchy-assistant.sock"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     # Speech-to-Text configuration
-    # Options: "whisper-cpp", "auto", "faster-whisper", "groq", "openai", "speech_recognition", "vosk", "mock"
+    # Options: "whisper-cpp", "auto", "faster-whisper", "groq", "sarvam", "openai", "speech_recognition", "vosk", "mock"
     "stt_backend": "whisper-cpp",
     "language": "auto",
-    "whisper_model": "tiny",
+    "whisper_model": "base",
     "whisper_device": "cpu",       # "cpu" or "cuda"
     "whisper_compute_type": "int8", # "int8", "float16", "default"
     "assistant_name": "Max",
 
     # API Keys (can also be read from environment variables)
+    "sarvam_api_key": "",
     "groq_api_key": "",
     "openai_api_key": "",
     "gemini_api_key": "",
+    "reasoning_effort": "medium",  # "low", "medium", "high"
 
     # Audio recording settings
     "sample_rate": 16000,
@@ -67,6 +69,8 @@ def load_config() -> Dict[str, Any]:
             print(f"[omarchy-assistant] Warning: Failed to parse {CONFIG_FILE}: {e}")
 
     # Override from environment variables if present
+    if os.getenv("SARVAM_API_KEY") and not config.get("sarvam_api_key"):
+        config["sarvam_api_key"] = os.getenv("SARVAM_API_KEY", "")
     if os.getenv("GROQ_API_KEY") and not config.get("groq_api_key"):
         config["groq_api_key"] = os.getenv("GROQ_API_KEY", "")
     if os.getenv("OPENAI_API_KEY") and not config.get("openai_api_key"):
