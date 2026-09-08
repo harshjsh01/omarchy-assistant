@@ -34,9 +34,11 @@ class AssistantDaemon:
         self.tts = TTSEngine(self.config)
         self.meeting = MeetingRecorder(self.config, self.stt, self.router)
 
-        self.state = "idle"  # idle, listening, processing, executing, speaking, meeting_recording
+        self.state = "idle"  # idle, listening, processing, executing, speaking, meeting_recording, continuous_standby
         self.continuous_mode = False
         self._continuous_thread = None
+        self._dialogue_active_until = 0.0
+        self._last_action_desc = ""
         self.current_transcript = ""
         self.last_action = {}
         self.is_busy = False
@@ -47,7 +49,13 @@ class AssistantDaemon:
 
     def set_state(self, state: str, transcript: str = "", action_desc: str = "") -> None:
         """Atomically update state and persist to /tmp/omarchy-assistant-state.json."""
+        if (state == self.state and 
+            (not transcript or transcript == self.current_transcript) and
+            action_desc == self._last_action_desc):
+            return
+
         self.state = state
+        self._last_action_desc = action_desc
         if transcript:
             self.current_transcript = transcript
         state_data = {
@@ -109,7 +117,7 @@ class AssistantDaemon:
             if self.continuous_mode:
                 return {"status": "already_active", "message": "Continuous listening is already active."}
             self.continuous_mode = True
-            self.set_state("listening")
+            self.set_state("continuous_standby")
             self._continuous_thread = threading.Thread(target=self._run_continuous_loop, daemon=True)
             self._continuous_thread.start()
             return {"status": "started", "message": "Continuous listening started."}
@@ -130,7 +138,7 @@ class AssistantDaemon:
                 return {"status": "stopped", "message": "Continuous listening stopped."}
             else:
                 self.continuous_mode = True
-                self.set_state("listening")
+                self.set_state("continuous_standby")
                 self._continuous_thread = threading.Thread(target=self._run_continuous_loop, daemon=True)
                 self._continuous_thread.start()
                 return {"status": "started", "message": "Continuous listening started."}
@@ -249,6 +257,36 @@ class AssistantDaemon:
             finally:
                 self.is_busy = False
 
+    def _is_addressed_to_max(self, transcript: str) -> bool:
+        """
+        Check if speech during continuous mode is directed at Max.
+        Allows natural conversation without wake word during active dialogue window.
+        """
+        import re
+        clean = transcript.lower().strip()
+        if not clean:
+            return False
+
+        # If user is in an active conversational window (within 20s of previous turn), user is in a dialogue with Max
+        if time.time() < getattr(self, "_dialogue_active_until", 0.0):
+            return True
+
+        # Stop commands are always accepted
+        if any(p in clean for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
+            return True
+
+        # Wake phrases, names, and liveness inquiries
+        wake_patterns = [
+            r"\b(hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|namaste\s+max)\b",
+            r"\bmax\b",
+            r"\b(are you alive|are you there|can you hear me|you alive|zinda ho|sun rahe ho|kya tum zinda ho|kya tum sun rahe ho)\b",
+        ]
+        for pat in wake_patterns:
+            if re.search(pat, clean):
+                return True
+
+        return False
+
     def _run_continuous_loop(self):
         """Continuously listen and execute commands hands-free until stopped."""
         print("[omarchy-assistant] Continuous listening loop started.")
@@ -259,18 +297,26 @@ class AssistantDaemon:
             success=True
         )
         self.tts.speak(greeting, wait=True)
+        self.set_state("continuous_standby")
 
         while self.continuous_mode:
             try:
-                # 1. Listening state
+                # 1. Standby state (green microphone icon in bar)
                 self.is_busy = False
-                self.set_state("listening")
+                self.set_state("continuous_standby")
+
+                # Callback when user starts speaking -> switch UI immediately to animated blue dots
+                def on_speech_start_callback():
+                    if self.continuous_mode:
+                        self.set_state("listening")
 
                 # 2. Record audio with VAD (stops automatically when user pauses speaking)
                 wav_path = self.recorder.record_with_vad(
-                    max_duration=self.config.get("max_record_seconds", 10.0),
+                    max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 300.0)
+                    energy_threshold=self.config.get("silence_threshold_energy", 300.0),
+                    on_speech_start=on_speech_start_callback,
+                    idle_timeout=3.5
                 )
 
                 if not self.continuous_mode:
@@ -281,17 +327,18 @@ class AssistantDaemon:
                             pass
                     break
 
-                # If no speech was detected by VAD or no audio file, loop again smoothly
+                # If no speech was detected in this slice, loop again cleanly in standby
                 if not getattr(self.recorder, "last_recording_had_speech", False) or not wav_path or not os.path.exists(wav_path):
                     if wav_path and os.path.exists(wav_path):
                         try:
                             os.unlink(wav_path)
                         except OSError:
                             pass
-                    time.sleep(0.1)
+                    self.set_state("continuous_standby")
+                    time.sleep(0.05)
                     continue
 
-                # User spoke and paused: transition to processing
+                # User spoke and paused: transition to processing (animated yellow dots)
                 self.is_busy = True
                 self.set_state("processing")
                 if self.config.get("sound_feedback", True):
@@ -306,7 +353,8 @@ class AssistantDaemon:
                     pass
 
                 if not transcript or not transcript.strip():
-                    time.sleep(0.1)
+                    self.set_state("continuous_standby")
+                    time.sleep(0.05)
                     continue
 
                 print(f"[omarchy-assistant] [Continuous] Heard: '{transcript}'")
@@ -315,11 +363,21 @@ class AssistantDaemon:
                 clean_lower = transcript.lower().strip()
                 if any(p in clean_lower for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
                     self.continuous_mode = False
-                    bye = "Continuous listening stopped. Press Super plus A or say Hey Max when you need me."
+                    bye = "Continuous listening stopped. Say Hey Max when you need me."
                     self.set_state("speaking", transcript=transcript, action_desc=bye)
                     self.tts.speak(bye, wait=True)
                     self.set_state("idle")
                     break
+
+                # Filter: check if addressed to Max (wake word, liveness, or active dialogue window)
+                if not self._is_addressed_to_max(transcript):
+                    print(f"[omarchy-assistant] [Continuous] Ignored non-addressed speech in standby: '{transcript}'")
+                    self.set_state("continuous_standby")
+                    time.sleep(0.1)
+                    continue
+
+                # Refresh dialogue active timer (20 seconds for natural follow-ups without repeating Hey Max)
+                self._dialogue_active_until = time.time() + 20.0
 
                 # 4. Route intent
                 action = self.router.route(transcript)
@@ -355,10 +413,12 @@ class AssistantDaemon:
                 time.sleep(0.6)
                 if self.continuous_mode and self.config.get("sound_feedback", True):
                     self.recorder.play_feedback_tone("start")
+                self.set_state("continuous_standby")
 
             except Exception as e:
                 print(f"[omarchy-assistant] Continuous loop error: {e}", file=sys.stderr)
-                time.sleep(1.0)
+                self.set_state("continuous_standby")
+                time.sleep(0.5)
 
         self.continuous_mode = False
         self.set_state("idle")

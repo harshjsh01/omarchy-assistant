@@ -41,11 +41,43 @@ class CommandRouter:
                 "category": "conversational"
             }
 
+        # Direct liveness and status checks (are you alive, are you there, zinda ho)
+        if re.search(r"\b(are you alive|are you there|can you hear me|are you listening|you alive|zinda ho|sun rahe ho|kya tum zinda ho|kya tum sun rahe ho)\b", clean_text):
+            return {
+                "status": "matched",
+                "intent": "liveness_check",
+                "command": "",
+                "spoken_response": "Yes, I am alive and listening! How may I assist you?",
+                "category": "conversational"
+            }
+
         # Strip wake prefix (e.g. "Max open browser" -> "open browser")
         clean_text = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max)\b\s*", "", clean_text).strip()
         normalized_text = re.sub(r"[^\w\s%+-]", "", clean_text)
 
-        # 1. Direct Regex / Rule Matching
+        # Check if the prompt contains complex, creative, or conversational intent
+        # that should be handled autonomously by Antigravity Gemini instead of static presets
+        complex_keywords = [
+            "brainstorm", "project", "idea", "plan", "build", "create", "code", "develop",
+            "documentation", "docs", "write", "design", "system", "architecture", "script",
+            "how", "why", "what", "who", "where", "when", "can you", "could you", "tell me",
+            "explain", "help", "think", "suggest", "look up", "search for",
+            "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao"
+        ]
+        words = clean_text.split()
+        has_conjunction = any(w in words for w in ["and", "then", "because", "also", "aur", "phir"])
+        has_complex_keyword = any(k in clean_text for k in complex_keywords)
+        is_slash_command = clean_text.startswith("/")
+
+        # If it's a slash command, compound command, or complex request:
+        # send directly to Antigravity Gemini for intelligent reasoning and tool execution
+        if is_slash_command or has_complex_keyword or (has_conjunction and len(words) > 3):
+            if self.config.get("llm_fallback_enabled", True):
+                llm_result = self._fallback_llm(clean_text or text)
+                if llm_result:
+                    return llm_result
+
+        # 1. Direct Regex / Rule Matching (for instantaneous desktop toggles: volume, media, brightness)
         rule_match = self._match_rules(normalized_text)
         if rule_match:
             return rule_match

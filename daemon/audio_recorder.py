@@ -119,10 +119,18 @@ class AudioRecorder:
 
         return None
 
-    def record_with_vad(self, max_duration: float = 10.0, silence_timeout: float = 1.2, energy_threshold: float = 300.0) -> Optional[str]:
+    def record_with_vad(
+        self,
+        max_duration: float = 10.0,
+        silence_timeout: float = 1.2,
+        energy_threshold: float = 300.0,
+        on_speech_start=None,
+        idle_timeout: float = 4.0
+    ) -> Optional[str]:
         """
         Record audio with automatic silence detection (VAD).
         Stops automatically when user stops speaking after saying a command.
+        Calls on_speech_start() the moment speech is detected.
         """
         self.start_recording()
         start = time.time()
@@ -130,10 +138,10 @@ class AudioRecorder:
         silence_start: Optional[float] = None
 
         # Brief initial pause to let audio driver spin up
-        time.sleep(0.2)
+        time.sleep(0.15)
 
         while (time.time() - start) < max_duration:
-            time.sleep(0.1)
+            time.sleep(0.08)
             if not self.current_wav_path or not os.path.exists(self.current_wav_path):
                 continue
 
@@ -152,7 +160,13 @@ class AudioRecorder:
                                 rms = math.sqrt(sum(s * s for s in shorts) / count)
 
                                 if rms > energy_threshold:
-                                    has_spoken = True
+                                    if not has_spoken:
+                                        has_spoken = True
+                                        if on_speech_start:
+                                            try:
+                                                on_speech_start()
+                                            except Exception:
+                                                pass
                                     silence_start = None
                                 else:
                                     if has_spoken:
@@ -161,6 +175,9 @@ class AudioRecorder:
                                         elif (time.time() - silence_start) >= silence_timeout:
                                             # User spoke and has now paused for silence_timeout -> stop & execute!
                                             break
+                                    elif idle_timeout > 0 and (time.time() - start) >= idle_timeout:
+                                        # Silence throughout idle slice, recycle audio buffer cleanly
+                                        break
             except Exception:
                 pass
 

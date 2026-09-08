@@ -117,7 +117,7 @@ Panel {
     tooltipText: {
       if (root.isListening) return "Max: Listening (Speak now)..."
       if (root.isProcessing) return "Max: Thinking & Speaking..."
-      if (root.continuousMode) return "Max: Continuous Listening (Active)"
+      if (root.currentState === "continuous_standby" || root.continuousMode) return "Max: Continuous Standby (Say 'Hey Max' or 'Are you alive?')"
       return "Max Assistant (Click for Dashboard | Right-Click: Continuous Mode)"
     }
 
@@ -216,7 +216,7 @@ Panel {
                   text: {
                     if (root.isListening) return "Listening to voice..."
                     if (root.isProcessing) return "Thinking (Gemini 3.8 Flash)..."
-                    if (root.continuousMode) return "Continuous Listening Active"
+                    if (root.currentState === "continuous_standby" || root.continuousMode) return "Continuous Standby (Say 'Hey Max')"
                     return "Ready • Super+A"
                   }
                   color: root.dim
