@@ -288,8 +288,9 @@ class AssistantDaemon:
         action_keywords = [
             "open", "launch", "play", "pause", "resume", "stop", "close", "kill",
             "volume", "mute", "unmute", "brightness", "switch", "workspace",
-            "screenshot", "capture", "run", "start", "kholo", "band", "chalao",
-            "bajao", "roko", "badhao", "kam karo", "dikhao"
+            "screenshot", "capture", "run", "start", "remember", "remind", "reminder",
+            "kholo", "band", "chalao", "bajao", "roko", "badhao", "kam karo", "dikhao",
+            "yaad"
         ]
         if any(re.search(rf"\b{re.escape(k)}\b", clean) for k in action_keywords):
             return True

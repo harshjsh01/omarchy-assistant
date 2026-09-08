@@ -905,7 +905,51 @@ class CommandRouter:
                 "category": "system"
             }
 
-        # 5. Offline Fallback: Identity & Persona (Max)
+        # 5. Offline Fallback: Remember / Memory
+        mem_match = re.search(r"\b(?:remember\s+(?:that|this)?|yaad\s+rakhna\s+(?:ki)?)\s+(.+)", clean)
+        if mem_match:
+            note = mem_match.group(1).strip()
+            import datetime
+            ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            mem_file = os.path.expanduser("~/Work/MEMORY.md")
+            try:
+                with open(mem_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n- **[{ts}]**: {note}")
+                return {
+                    "status": "matched",
+                    "intent": "memory_store",
+                    "command": "",
+                    "spoken_response": f"I've remembered that: {note}.",
+                    "category": "ai"
+                }
+            except Exception:
+                pass
+
+        # 6. Offline Fallback: Reminders
+        rem_match = re.search(r"\bremind\s+me\s+in\s+(\d+)\s*(minute|minutes|min|mins|ghante|ghanta|hour|hours)?\s*(?:to\s+)?(.+)", clean)
+        if rem_match:
+            val = int(rem_match.group(1))
+            unit = rem_match.group(2) or "minutes"
+            mins = val * 60 if "hour" in unit or "ghanta" in unit else val
+            task = rem_match.group(3).strip()
+            import datetime
+            created_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+            sched_ts = (datetime.datetime.now() + datetime.timedelta(minutes=mins)).strftime("%Y-%m-%d %H:%M")
+            rem_file = os.path.expanduser("~/Work/REMIND.md")
+            try:
+                with open(rem_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n| {int(datetime.datetime.now().timestamp()) % 10000:04d} | {created_ts} | {sched_ts} | {task} | omarchy reminder {mins} | Active |")
+            except Exception:
+                pass
+            return {
+                "status": "matched",
+                "intent": "set_reminder",
+                "command": f"omarchy reminder {mins} {json.dumps(task)}",
+                "spoken_response": f"Reminder set for {mins} minutes from now to {task}.",
+                "category": "system"
+            }
+
+        # 7. Offline Fallback: Identity & Persona (Max)
         if re.search(r"\b(who are you|tum kaun ho|what is your name|apna naam batao|tell me about yourself)\b", clean):
             return {
                 "status": "llm",
