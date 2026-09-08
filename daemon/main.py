@@ -259,19 +259,19 @@ class AssistantDaemon:
 
     def _is_addressed_to_max(self, transcript: str) -> bool:
         """
-        Check if speech during continuous mode is directed at Max or is an intentional query.
+        Check if speech during continuous mode is directed at Max or is an intentional action/query.
         """
         import re
         clean = transcript.lower().strip()
         if not clean or len(clean.split()) == 0:
             return False
 
-        # If user is in an active conversational window (within 20s of previous turn)
-        if time.time() < getattr(self, "_dialogue_active_until", 0.0):
-            return True
-
         # Stop commands are always accepted
         if any(p in clean for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
+            return True
+
+        # If user is in an active conversational window (within 20s of previous turn)
+        if time.time() < getattr(self, "_dialogue_active_until", 0.0):
             return True
 
         # Wake phrases, names, and liveness inquiries
@@ -284,6 +284,16 @@ class AssistantDaemon:
             if re.search(pat, clean):
                 return True
 
+        # Direct action and control commands (open, play, launch, volume, etc.)
+        action_keywords = [
+            "open", "launch", "play", "pause", "resume", "stop", "close", "kill",
+            "volume", "mute", "unmute", "brightness", "switch", "workspace",
+            "screenshot", "capture", "run", "start", "kholo", "band", "chalao",
+            "bajao", "roko", "badhao", "kam karo", "dikhao"
+        ]
+        if any(re.search(rf"\b{re.escape(k)}\b", clean) for k in action_keywords):
+            return True
+
         # Complex reasoning/brainstorming/coding queries intended for AI
         complex_keywords = [
             "brainstorm", "project", "idea", "plan", "build", "create", "code", "develop",
@@ -293,7 +303,7 @@ class AssistantDaemon:
             "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao"
         ]
         words = clean.split()
-        if any(k in clean for k in complex_keywords) and len(words) >= 3:
+        if any(k in clean for k in complex_keywords) and len(words) >= 2:
             return True
 
         return False
@@ -380,7 +390,17 @@ class AssistantDaemon:
                     self.set_state("idle")
                     break
 
-                # 4. Route intent
+                # In continuous mode: only route speech if addressed to Max or an intentional command/query
+                if not self._is_addressed_to_max(transcript):
+                    print(f"[omarchy-assistant] [Continuous] Ignored non-command speech in standby: '{transcript}'")
+                    self.set_state("continuous_standby")
+                    time.sleep(0.05)
+                    continue
+
+                # Refresh dialogue active timer (20 seconds for natural follow-ups without repeating Hey Max)
+                self._dialogue_active_until = time.time() + 20.0
+
+                # 4. Route intent (passes straight into Antigravity session without alteration)
                 action = self.router.route(transcript)
                 self.last_action = action
 
@@ -391,25 +411,6 @@ class AssistantDaemon:
                         self.tts.speak(action["spoken_response"], wait=True)
                     self.set_state("idle")
                     break
-
-                # In continuous mode:
-                # 1. Matched system commands (open youtube, volume, browser, terminal, etc.) execute immediately!
-                # 2. Conversational / Antigravity commands are only sent if user intentionally addressed Max,
-                #    asked an explicit query, or is in an ongoing dialog turn (so background speech is not fed to AI).
-                is_addressed = self._is_addressed_to_max(transcript)
-                is_direct_command = (action.get("status") == "matched" and action.get("category") != "unknown")
-
-                if action.get("intent") in ["greeting", "liveness_check"]:
-                    is_addressed = True
-
-                if not is_addressed and not is_direct_command:
-                    print(f"[omarchy-assistant] [Continuous] Ignored non-command speech in standby: '{transcript}'")
-                    self.set_state("continuous_standby")
-                    time.sleep(0.05)
-                    continue
-
-                # Refresh dialogue active timer (20 seconds for natural follow-ups without repeating Hey Max)
-                self._dialogue_active_until = time.time() + 20.0
 
                 # 5. Execute action
                 self.set_state(

@@ -71,10 +71,8 @@ class CommandRouter:
             }
 
         # 3. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING!
-        # Strip wake prefix if present ("Hey Max open youtube" -> "open youtube")
-        prompt_text = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max)\b\s*", "", text, flags=re.IGNORECASE).strip()
-        if not prompt_text:
-            prompt_text = text
+        # Send spoken transcript directly to the active Antigravity CLI session without alteration
+        prompt_text = text.strip()
 
         # Send directly to the active Antigravity CLI chat session
         llm_result = self._fallback_llm(prompt_text)
@@ -716,7 +714,7 @@ class CommandRouter:
             if not agy_bin or not os.path.exists(agy_bin):
                 return ""
             res = subprocess.run(
-                [agy_bin, "--effort", "low", "--output-format", "json", "--print", "Hello Max, start a new chat session."],
+                [agy_bin, "--effort", "low", "--output-format", "json", "--print", "You are Max. I will call you Max."],
                 cwd=chat_dir,
                 capture_output=True,
                 text=True,
@@ -747,7 +745,7 @@ class CommandRouter:
             except Exception:
                 pass
 
-        # If not on disk, check conversation_summaries.db for existing chat in ~/Work/chat
+        # If not on disk, check conversation_summaries.db for existing chat in ~/Work/chat or ~/Work
         try:
             import sqlite3
             db_path = os.path.expanduser("~/.gemini/antigravity-cli/conversation_summaries.db")
@@ -756,8 +754,8 @@ class CommandRouter:
                     cur = conn.cursor()
                     row = cur.execute(
                         "SELECT conversation_id FROM conversation_summaries "
-                        "WHERE workspace_uris LIKE '%Work/chat%' "
-                        "ORDER BY (conversation_id = 'cdd47467-6db4-44cc-8159-32ce795a2664') DESC, last_modified_time DESC LIMIT 1"
+                        "WHERE workspace_uris LIKE '%Work%' "
+                        "ORDER BY last_modified_time DESC LIMIT 1"
                     ).fetchone()
                     if row and row[0]:
                         cid = row[0]
@@ -772,58 +770,10 @@ class CommandRouter:
         return self._create_new_antigravity_session()
 
     def _fallback_llm(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Conversational AI engine for Max (fast helpers + live Antigravity Gemini session + offline fallback)."""
+        """Conversational AI engine for Max (live Antigravity Gemini session + offline fallback)."""
         clean = prompt.lower().strip()
 
-        # 1. Fast offline helpers: Time and Date
-        if re.search(r"\b(what time is it|time kya hai|kya time hua hai|current time)\b", clean):
-            import datetime
-            now_str = datetime.datetime.now().strftime("%I:%M %p")
-            return {
-                "status": "llm",
-                "intent": "current_time",
-                "command": "",
-                "spoken_response": f"It is currently {now_str}.",
-                "category": "ai"
-            }
-        if re.search(r"\b(what is today's date|today's date|aaj kaunsi tareekh hai|current date)\b", clean):
-            import datetime
-            now_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
-            return {
-                "status": "llm",
-                "intent": "current_date",
-                "command": "",
-                "spoken_response": f"Today is {now_str}.",
-                "category": "ai"
-            }
-
-        # 2. Fast offline helpers: Basic math
-        calc_match = re.search(r"(?:what is|calculate|solve)?\s*(\d+(?:\.\d+)?\s*[\+\-\*\/xX]\s*\d+(?:\.\d+)?)\b", clean)
-        if calc_match:
-            expr = calc_match.group(1).replace("x", "*").replace("X", "*")
-            try:
-                val = eval(expr, {"__builtins__": None}, {})
-                return {
-                    "status": "llm",
-                    "intent": "calculator",
-                    "command": "",
-                    "spoken_response": f"The answer is {val}.",
-                    "category": "ai"
-                }
-            except Exception:
-                pass
-
-        # 3. Fast offline helpers: Battery
-        if re.search(r"\b(battery|battery level|battery percentage)\b", clean):
-            return {
-                "status": "llm",
-                "intent": "battery_status",
-                "command": "upower -i $(upower -e | grep 'BAT') 2>/dev/null | grep -E 'percentage|state' || echo 'No battery found'",
-                "spoken_response": "Checking battery status.",
-                "category": "system"
-            }
-
-        # 4. Primary Intelligence: Antigravity CLI (Gemini 3.8 Flash via active Google AI Pro session in ~/Work/chat)
+        # 1. Primary Intelligence: Antigravity CLI (Gemini 3.8 Flash via active Google AI Pro session in ~/Work/chat)
         try:
             chat_dir = os.path.expanduser("~/Work/chat")
             os.makedirs(chat_dir, exist_ok=True)
@@ -906,6 +856,54 @@ class CommandRouter:
                     }
         except Exception as e:
             print(f"[omarchy-assistant] Antigravity chat error: {e}", file=sys.stderr)
+
+        # 2. Offline Fallback: Time and Date
+        if re.search(r"\b(what time is it|time kya hai|kya time hua hai|current time)\b", clean):
+            import datetime
+            now_str = datetime.datetime.now().strftime("%I:%M %p")
+            return {
+                "status": "llm",
+                "intent": "current_time",
+                "command": "",
+                "spoken_response": f"It is currently {now_str}.",
+                "category": "ai"
+            }
+        if re.search(r"\b(what is today's date|today's date|aaj kaunsi tareekh hai|current date)\b", clean):
+            import datetime
+            now_str = datetime.datetime.now().strftime("%A, %B %d, %Y")
+            return {
+                "status": "llm",
+                "intent": "current_date",
+                "command": "",
+                "spoken_response": f"Today is {now_str}.",
+                "category": "ai"
+            }
+
+        # 3. Offline Fallback: Basic math
+        calc_match = re.search(r"(?:what is|calculate|solve)?\s*(\d+(?:\.\d+)?\s*[\+\-\*\/xX]\s*\d+(?:\.\d+)?)\b", clean)
+        if calc_match:
+            expr = calc_match.group(1).replace("x", "*").replace("X", "*")
+            try:
+                val = eval(expr, {"__builtins__": None}, {})
+                return {
+                    "status": "llm",
+                    "intent": "calculator",
+                    "command": "",
+                    "spoken_response": f"The answer is {val}.",
+                    "category": "ai"
+                }
+            except Exception:
+                pass
+
+        # 4. Offline Fallback: Battery
+        if re.search(r"\b(battery|battery level|battery percentage)\b", clean):
+            return {
+                "status": "llm",
+                "intent": "battery_status",
+                "command": "upower -i $(upower -e | grep 'BAT') 2>/dev/null | grep -E 'percentage|state' || echo 'No battery found'",
+                "spoken_response": "Checking battery status.",
+                "category": "system"
+            }
 
         # 5. Offline Fallback: Identity & Persona (Max)
         if re.search(r"\b(who are you|tum kaun ho|what is your name|apna naam batao|tell me about yourself)\b", clean):

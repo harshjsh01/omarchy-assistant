@@ -255,7 +255,7 @@ class WhisperCppEngine(BaseSTTEngine):
                 "--no-prints",
                 "-l", self.language,
                 "-t", "4",
-                "--prompt", "Max, Antigravity, Omarchy, Hyprland, agy, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation"
+                "--prompt", "Max, Antigravity, Omarchy, Hyprland, agy, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation, Seedhe Maut, YouTube, gaana, bajao, chalao, song, music, play"
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             lines = []
