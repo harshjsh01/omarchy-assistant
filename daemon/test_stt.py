@@ -89,10 +89,10 @@ def run_stt_test_turn(recorder: AudioRecorder, stt, fixed_seconds: float = 0.0) 
 
             wav_path = recorder.record_with_vad(
                 max_duration=12.0,
-                silence_timeout=1.1,
-                energy_threshold=850.0,
+                silence_timeout=1.6,
+                energy_threshold=300.0,
                 on_speech_start=on_speech_start,
-                max_wait_speech=6.0
+                max_wait_speech=8.0
             )
 
         if not wav_path or not os.path.exists(wav_path):
@@ -126,21 +126,54 @@ def run_stt_test_turn(recorder: AudioRecorder, stt, fixed_seconds: float = 0.0) 
 
 def main():
     parser = argparse.ArgumentParser(description="Test Omarchy Assistant Speech-to-Text (STT)")
+    parser.add_argument("-b", "--backend", "--engine", type=str, default="", help="STT backend to test: sarvam, gemini, whisper-cpp, groq")
+    parser.add_argument("-m", "--model", type=str, default="", help="Model name (e.g. saaras:v2, saaras:v3, gemini-2.0-flash, base, small)")
+    parser.add_argument("-k", "--key", type=str, default="", help="API key for cloud STT backend (Sarvam/Groq/Gemini)")
     parser.add_argument("-s", "--seconds", type=float, default=0.0, help="Record fixed seconds instead of voice activity detection")
     parser.add_argument("-l", "--loop", action="store_true", help="Keep testing turns continuously until Ctrl+C")
     parser.add_argument("-f", "--file", type=str, default="", help="Transcribe an existing WAV file directly")
     args = parser.parse_args()
 
     config = load_config()
+    if args.backend:
+        config["stt_backend"] = args.backend
+    if args.model:
+        if config.get("stt_backend") == "sarvam":
+            config["sarvam_model"] = args.model
+        elif config.get("stt_backend") in ["gemini", "gemini-audio"]:
+            config["gemini_stt_model"] = args.model
+        else:
+            config["whisper_model"] = args.model
+    if args.key:
+        if config.get("stt_backend") == "sarvam":
+            config["sarvam_api_key"] = args.key
+        elif config.get("stt_backend") in ["gemini", "gemini-audio"]:
+            config["gemini_api_key"] = args.key
+        elif config.get("stt_backend") == "groq":
+            config["groq_api_key"] = args.key
+
     recorder = AudioRecorder(sample_rate=config.get("sample_rate", 16000))
     stt = get_stt_engine(config)
 
     engine_name = stt.__class__.__name__
-    model_path = getattr(stt, "model_path", "")
-    model_name = Path(model_path).name if model_path else "default"
-    lang = getattr(stt, "language", "auto")
+    if engine_name == "SarvamSTTEngine":
+        model_name = getattr(stt, "model", "saaras:v2")
+    elif engine_name == "GeminiMultimodalSTTEngine":
+        model_name = getattr(stt, "model", "gemini-2.0-flash")
+    else:
+        model_path = getattr(stt, "model_path", "")
+        model_name = Path(model_path).name if model_path else getattr(stt, "model_size", "default")
+    lang = getattr(stt, "language", getattr(stt, "language_code", "auto"))
 
     print_banner(engine_name, model_name, lang)
+
+    if engine_name == "SarvamSTTEngine" and not stt.is_available():
+        print(f"{C_RED}⚠️  Sarvam API Key is missing!{C_RESET}")
+        print(f"{C_YELLOW}To test Sarvam AI ({model_name}):{C_RESET}")
+        print(f"  1. Get a free API key at: {C_CYAN}https://dashboard.sarvam.ai/{C_RESET}")
+        print(f"  2. Run: {C_CYAN}omarchy-assistant test-stt --backend sarvam --key 'YOUR_API_KEY'{C_RESET}")
+        print(f"     Or save it permanently to config: {C_CYAN}omarchy-assistant set-key sarvam 'YOUR_KEY'{C_RESET}\n")
+        sys.exit(1)
 
     # File transcription mode
     if args.file:

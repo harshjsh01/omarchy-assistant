@@ -169,6 +169,36 @@ case "$cmd" in
         PYTHONPATH="$REPO_DIR" python3 -m daemon.test_stt "$@"
         ;;
 
+    set-key)
+        provider="${2:-}"
+        key="${3:-}"
+        if [[ -z "$provider" || -z "$key" ]]; then
+            echo "Usage: omarchy-assistant set-key {sarvam|gemini|groq|openai} \"YOUR_API_KEY\""
+            exit 1
+        fi
+        key_field="${provider}_api_key"
+        python3 -c "
+import json, os
+cfg_path = os.path.expanduser('$CONFIG_FILE')
+os.makedirs(os.path.dirname(cfg_path), exist_ok=True)
+data = {}
+if os.path.exists(cfg_path):
+    try:
+        with open(cfg_path) as f: data = json.load(f)
+    except: pass
+data['$key_field'] = '$key'
+if '$provider' == 'sarvam':
+    data['stt_backend'] = 'sarvam'
+elif '$provider' == 'gemini':
+    data['stt_backend'] = 'gemini'
+with open(cfg_path, 'w') as f:
+    json.dump(data, f, indent=2)
+print('✅ Saved $key_field and updated STT backend in ' + cfg_path)
+"
+        echo "Restarting daemon to apply new key..."
+        systemctl --user restart omarchy-assistant.service 2>/dev/null || true
+        ;;
+
     status)
         echo "=== Omarchy Voice Assistant Status ==="
         if is_daemon_running; then

@@ -155,8 +155,8 @@ class AudioRecorder:
             if not has_spoken:
                 pre_roll.append(data)
                 # Adapt noise floor slowly to room ambient acoustics
-                self.stream_noise_floor = 0.98 * self.stream_noise_floor + 0.02 * rms
-                effective_thresh = max(self.stream_noise_floor * 1.5, 540.0, energy_threshold)
+                self.stream_noise_floor = 0.95 * self.stream_noise_floor + 0.05 * rms
+                effective_thresh = self.stream_noise_floor + max(180.0, energy_threshold * 0.2)
 
                 if rms > effective_thresh:
                     consecutive_speech += 1
@@ -175,7 +175,7 @@ class AudioRecorder:
                     consecutive_speech = 0
             else:
                 speech_chunks.append(data)
-                effective_thresh = max(self.stream_noise_floor * 1.25, 450.0, energy_threshold * 0.8)
+                effective_thresh = self.stream_noise_floor + 120.0
 
                 if rms > effective_thresh:
                     active_speech_chunks += 1
@@ -267,8 +267,9 @@ class AudioRecorder:
 
                 if not has_spoken:
                     pre_roll.append(data)
-                    noise_floor = 0.98 * noise_floor + 0.02 * rms
-                    effective_thresh = max(noise_floor * 1.5, 540.0, energy_threshold)
+                    noise_floor = 0.95 * noise_floor + 0.05 * rms
+                    # Relative delta above ambient noise floor (avoids deafness when ambient noise is high)
+                    effective_thresh = noise_floor + max(180.0, energy_threshold * 0.2)
 
                     if rms > effective_thresh:
                         consecutive_speech += 1
@@ -288,7 +289,7 @@ class AudioRecorder:
                             break
                 else:
                     speech_chunks.append(data)
-                    effective_thresh = max(noise_floor * 1.25, 450.0, energy_threshold * 0.8)
+                    effective_thresh = noise_floor + 120.0
 
                     if rms > effective_thresh:
                         active_speech_chunks += 1

@@ -167,16 +167,23 @@ class SpeechRecognitionEngine(BaseSTTEngine):
 
 
 class SarvamSTTEngine(BaseSTTEngine):
-    """Sarvam AI Saaras:v2 multilingual STT for Indian English, Hindi & Hinglish."""
+    """Sarvam AI Saaras:v2 / Saaras:v3 multilingual STT for Indian English, Hindi & Hinglish."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: str = "saaras:v2", language_code: str = "unknown"):
         self.api_key = api_key or os.getenv("SARVAM_API_KEY", "")
+        self.model = model
+        self.language_code = language_code
 
     def is_available(self) -> bool:
         return bool(self.api_key)
 
     def transcribe(self, wav_path: str) -> str:
+        if not self.is_available():
+            print("[omarchy-assistant] Sarvam AI error: SARVAM_API_KEY is not configured.", file=sys.stderr)
+            return ""
+
         import urllib.request
+        import urllib.error
         import json
         import sys
 
@@ -187,11 +194,11 @@ class SarvamSTTEngine(BaseSTTEngine):
         body = bytearray()
         body.extend(f"--{boundary}\r\n".encode())
         body.extend(b'Content-Disposition: form-data; name="model"\r\n\r\n')
-        body.extend(b"saaras:v2\r\n")
+        body.extend(f"{self.model}\r\n".encode())
 
         body.extend(f"--{boundary}\r\n".encode())
         body.extend(b'Content-Disposition: form-data; name="language_code"\r\n\r\n')
-        body.extend(b"unknown\r\n")
+        body.extend(f"{self.language_code}\r\n".encode())
 
         body.extend(f"--{boundary}\r\n".encode())
         body.extend(b'Content-Disposition: form-data; name="file"; filename="audio.wav"\r\n')
@@ -211,9 +218,75 @@ class SarvamSTTEngine(BaseSTTEngine):
             with urllib.request.urlopen(req, timeout=12) as resp:
                 data = json.loads(resp.read().decode())
                 return data.get("transcript", "").strip()
+        except urllib.error.HTTPError as e:
+            err = e.read().decode("utf-8", errors="ignore")
+            print(f"[omarchy-assistant] Sarvam AI STT HTTP {e.code}: {err}", file=sys.stderr)
+            return ""
         except Exception as e:
             print(f"[omarchy-assistant] Sarvam AI STT error: {e}", file=sys.stderr)
             return ""
+
+
+class GeminiMultimodalSTTEngine(BaseSTTEngine):
+    """Google Gemini native multimodal audio STT for perfect Hindi, Hinglish & English."""
+
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash"):
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
+        self.model = model
+
+    def is_available(self) -> bool:
+        return bool(self.api_key)
+
+    def transcribe(self, wav_path: str) -> str:
+        if not self.is_available():
+            print("[omarchy-assistant] Gemini Multimodal error: GEMINI_API_KEY is not set.", file=sys.stderr)
+            return ""
+
+        import base64
+        import json
+        import urllib.request
+        import urllib.error
+        import sys
+
+        try:
+            with open(wav_path, "rb") as f:
+                audio_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": "audio/wav",
+                                "data": audio_b64
+                            }
+                        },
+                        {
+                            "text": "Transcribe the spoken audio verbatim in its original spoken language (Hindi, Hinglish, or English). Return ONLY the transcription text, nothing else."
+                        }
+                    ]
+                }]
+            }
+
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts:
+                        return parts[0].get("text", "").strip()
+                return ""
+        except Exception as e:
+            print(f"[omarchy-assistant] Gemini Multimodal STT error: {e}", file=sys.stderr)
+            return ""
+
 
 
 class WhisperCppEngine(BaseSTTEngine):
@@ -281,7 +354,10 @@ class WhisperCppEngine(BaseSTTEngine):
             hallucinations = {
                 "halt", "halt.", "halt,", "thank you", "thank you.", "thanks for watching",
                 "subtitles by", "bye", "you", "amara.org", "subtitle", "transcription",
-                "[music]", "[applause]", "[silence]", ".", "..", "...", "you.", "a"
+                "[music]", "[applause]", "[silence]", ".", "..", "...", "you.", "a",
+                "i'll see you next time", "i'll see you next time.", "see you next time",
+                "see you next time.", "thank you for watching.", "thank you for watching",
+                "please subscribe", "please subscribe."
             }
             norm = text.lower().strip(" ,.!?-")
             if not norm or norm in hallucinations or text.lower() in hallucinations:
@@ -313,19 +389,32 @@ def get_stt_engine(config: dict) -> BaseSTTEngine:
     """Factory to create appropriate STT backend."""
     backend = config.get("stt_backend", "auto").lower()
 
-    # 1. Check Sarvam AI if requested or configured with API key
+    # 1. Check Sarvam AI (Saaras:v2 / Saaras:v3)
     if backend == "sarvam" or (backend == "auto" and config.get("sarvam_api_key")):
-        engine = SarvamSTTEngine(config.get("sarvam_api_key"))
-        if engine.is_available():
+        engine = SarvamSTTEngine(
+            api_key=config.get("sarvam_api_key"),
+            model=config.get("sarvam_model", "saaras:v2"),
+            language_code=config.get("sarvam_language_code", "unknown")
+        )
+        if engine.is_available() or backend == "sarvam":
             return engine
 
-    # 2. Check Groq Cloud if requested or configured
+    # 2. Check Gemini Multimodal Audio
+    if backend in ["gemini", "gemini-audio", "gemini_multimodal"] or (backend == "auto" and config.get("gemini_api_key")):
+        engine = GeminiMultimodalSTTEngine(
+            api_key=config.get("gemini_api_key"),
+            model=config.get("gemini_stt_model", "gemini-2.0-flash")
+        )
+        if engine.is_available() or backend in ["gemini", "gemini-audio", "gemini_multimodal"]:
+            return engine
+
+    # 3. Check Groq Cloud if requested or configured
     if backend == "groq" or (backend == "auto" and config.get("groq_api_key")):
         engine = GroqWhisperEngine(config.get("groq_api_key"))
         if engine.is_available():
             return engine
 
-    # 3. Check OpenAI Whisper API
+    # 4. Check OpenAI Whisper API
     if backend == "openai" or (backend == "auto" and config.get("openai_api_key")):
         engine = OpenAIWhisperEngine(config.get("openai_api_key"))
         if engine.is_available():
