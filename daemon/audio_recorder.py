@@ -123,9 +123,9 @@ class AudioRecorder:
         self,
         max_duration: float = 12.0,
         silence_timeout: float = 1.2,
-        energy_threshold: float = 2200.0,
+        energy_threshold: float = 580.0,
         on_speech_start=None,
-        idle_timeout: float = 3.5
+        idle_timeout: float = 3.0
     ) -> Optional[str]:
         """
         Record audio with automatic silence detection (VAD).
@@ -137,11 +137,10 @@ class AudioRecorder:
         start = time.time()
         has_spoken = False
         silence_start: Optional[float] = None
-        ambient_samples = []
-        effective_threshold = max(2000.0, energy_threshold)
+        effective_threshold = energy_threshold
 
-        # Brief initial pause to let audio driver spin up
-        time.sleep(0.12)
+        # Pause to skip initial PulseAudio stream connection pop
+        time.sleep(0.25)
 
         while (time.time() - start) < max_duration:
             time.sleep(0.08)
@@ -161,12 +160,6 @@ class AudioRecorder:
                             if count > 0:
                                 shorts = struct.unpack(f"<{count}h", raw_data[:count * 2])
                                 rms = math.sqrt(sum(s * s for s in shorts) / count)
-
-                                # Adapt threshold during initial ambient audio
-                                if not has_spoken and len(ambient_samples) < 5:
-                                    ambient_samples.append(rms)
-                                    baseline = sum(ambient_samples) / len(ambient_samples)
-                                    effective_threshold = max(effective_threshold, baseline * 1.45 + 400.0)
 
                                 if rms > effective_threshold:
                                     if not has_spoken:

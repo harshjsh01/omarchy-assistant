@@ -190,7 +190,7 @@ class AssistantDaemon:
                 wav_path = self.recorder.record_with_vad(
                     max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 2200.0)
+                    energy_threshold=self.config.get("silence_threshold_energy", 580.0)
                 )
 
                 if self.config.get("sound_feedback", True):
@@ -325,9 +325,9 @@ class AssistantDaemon:
                 wav_path = self.recorder.record_with_vad(
                     max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 2200.0),
+                    energy_threshold=self.config.get("silence_threshold_energy", 580.0),
                     on_speech_start=on_speech_start_callback,
-                    idle_timeout=3.5
+                    idle_timeout=3.0
                 )
 
                 if not self.continuous_mode:
