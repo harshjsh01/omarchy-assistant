@@ -263,11 +263,12 @@ class AssistantDaemon:
         while self.continuous_mode:
             try:
                 # 1. Listening state
+                self.is_busy = False
                 self.set_state("listening")
 
-                # 2. Record audio with VAD
+                # 2. Record audio with VAD (stops automatically when user pauses speaking)
                 wav_path = self.recorder.record_with_vad(
-                    max_duration=self.config.get("max_record_seconds", 8.0),
+                    max_duration=self.config.get("max_record_seconds", 10.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
                     energy_threshold=self.config.get("silence_threshold_energy", 300.0)
                 )
@@ -281,7 +282,7 @@ class AssistantDaemon:
                     break
 
                 # If no speech was detected by VAD or no audio file, loop again smoothly
-                if not getattr(self.recorder, "last_recording_had_speech", True) or not wav_path or not os.path.exists(wav_path):
+                if not getattr(self.recorder, "last_recording_had_speech", False) or not wav_path or not os.path.exists(wav_path):
                     if wav_path and os.path.exists(wav_path):
                         try:
                             os.unlink(wav_path)
@@ -290,8 +291,11 @@ class AssistantDaemon:
                     time.sleep(0.1)
                     continue
 
-                # 3. Transcribe
+                # User spoke and paused: transition to processing
+                self.is_busy = True
                 self.set_state("processing")
+                if self.config.get("sound_feedback", True):
+                    self.recorder.play_feedback_tone("stop")
 
                 transcript = self.stt.transcribe(wav_path)
                 self.current_transcript = transcript
@@ -302,7 +306,6 @@ class AssistantDaemon:
                     pass
 
                 if not transcript or not transcript.strip():
-                    self.set_state("listening")
                     time.sleep(0.1)
                     continue
 
@@ -349,7 +352,9 @@ class AssistantDaemon:
                     self.tts.speak(action["spoken_response"], wait=True)
 
                 # Delay slightly so room acoustic echo clears before opening mic again
-                time.sleep(0.4)
+                time.sleep(0.6)
+                if self.continuous_mode and self.config.get("sound_feedback", True):
+                    self.recorder.play_feedback_tone("start")
 
             except Exception as e:
                 print(f"[omarchy-assistant] Continuous loop error: {e}", file=sys.stderr)

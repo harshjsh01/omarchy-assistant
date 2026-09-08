@@ -119,56 +119,48 @@ class AudioRecorder:
 
         return None
 
-    def record_with_vad(self, max_duration: float = 8.0, silence_timeout: float = 1.2, energy_threshold: float = 400.0) -> Optional[str]:
+    def record_with_vad(self, max_duration: float = 10.0, silence_timeout: float = 1.2, energy_threshold: float = 300.0) -> Optional[str]:
         """
         Record audio with automatic silence detection (VAD).
-        Stops automatically when user stops speaking.
+        Stops automatically when user stops speaking after saying a command.
         """
         self.start_recording()
         start = time.time()
         has_spoken = False
         silence_start: Optional[float] = None
 
-        # Give it a short moment to capture header
-        time.sleep(0.3)
+        # Brief initial pause to let audio driver spin up
+        time.sleep(0.2)
 
         while (time.time() - start) < max_duration:
-            time.sleep(0.15)
+            time.sleep(0.1)
             if not self.current_wav_path or not os.path.exists(self.current_wav_path):
                 continue
 
-            # Read latest chunk from file to compute RMS energy
             try:
-                with wave.open(self.current_wav_path, "rb") as wf:
-                    n_frames = wf.getnframes()
-                    if n_frames < int(self.sample_rate * 0.2):
-                        continue
-                    # Read last 0.2 seconds
-                    frames_to_read = min(n_frames, int(self.sample_rate * 0.2))
-                    wf.setpos(n_frames - frames_to_read)
-                    raw_data = wf.readframes(frames_to_read)
-                    
-                    if not raw_data:
-                        continue
+                file_size = os.path.getsize(self.current_wav_path)
+                if file_size > 44:
+                    with open(self.current_wav_path, "rb") as f:
+                        # Inspect the latest 0.2 seconds of 16kHz 16-bit mono audio (6400 bytes)
+                        bytes_to_read = min(file_size - 44, int(self.sample_rate * 2 * 0.2))
+                        if bytes_to_read >= 400:
+                            f.seek(file_size - bytes_to_read)
+                            raw_data = f.read(bytes_to_read)
+                            count = len(raw_data) // 2
+                            if count > 0:
+                                shorts = struct.unpack(f"<{count}h", raw_data[:count * 2])
+                                rms = math.sqrt(sum(s * s for s in shorts) / count)
 
-                    # Compute RMS
-                    count = len(raw_data) // 2
-                    if count == 0:
-                        continue
-                    shorts = struct.unpack(f"<{count}h", raw_data)
-                    sum_sq = sum(s * s for s in shorts)
-                    rms = math.sqrt(sum_sq / count)
-
-                    if rms > energy_threshold:
-                        has_spoken = True
-                        silence_start = None
-                    else:
-                        if has_spoken:
-                            if silence_start is None:
-                                silence_start = time.time()
-                            elif (time.time() - silence_start) >= silence_timeout:
-                                # User finished speaking
-                                break
+                                if rms > energy_threshold:
+                                    has_spoken = True
+                                    silence_start = None
+                                else:
+                                    if has_spoken:
+                                        if silence_start is None:
+                                            silence_start = time.time()
+                                        elif (time.time() - silence_start) >= silence_timeout:
+                                            # User spoke and has now paused for silence_timeout -> stop & execute!
+                                            break
             except Exception:
                 pass
 
