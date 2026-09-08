@@ -169,7 +169,7 @@ class SpeechRecognitionEngine(BaseSTTEngine):
 class SarvamSTTEngine(BaseSTTEngine):
     """Sarvam AI Saaras:v2 / Saaras:v3 multilingual STT for Indian English, Hindi & Hinglish."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "saaras:v2", language_code: str = "unknown"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "saaras:v3", language_code: str = "unknown"):
         self.api_key = api_key or os.getenv("SARVAM_API_KEY", "")
         self.model = model
         self.language_code = language_code
@@ -393,7 +393,7 @@ def get_stt_engine(config: dict) -> BaseSTTEngine:
     if backend == "sarvam" or (backend == "auto" and config.get("sarvam_api_key")):
         engine = SarvamSTTEngine(
             api_key=config.get("sarvam_api_key"),
-            model=config.get("sarvam_model", "saaras:v2"),
+            model=config.get("sarvam_model", "saaras:v3"),
             language_code=config.get("sarvam_language_code", "unknown")
         )
         if engine.is_available() or backend == "sarvam":

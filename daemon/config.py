@@ -24,7 +24,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
     # API Keys (can also be read from environment variables)
     "sarvam_api_key": "",
-    "sarvam_model": "saaras:v2",
+    "sarvam_model": "saaras:v3",
     "sarvam_language_code": "unknown",
     "groq_api_key": "",
     "openai_api_key": "",
