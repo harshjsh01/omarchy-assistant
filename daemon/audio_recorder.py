@@ -131,6 +131,7 @@ class AudioRecorder:
         speech_chunks = []
         has_spoken = False
         consecutive_speech = 0
+        active_speech_chunks = 0
         silence_chunks = 0
         silence_limit = max(15, int(silence_timeout / 0.05))
         max_chunks = int(max_duration / 0.05)
@@ -155,14 +156,16 @@ class AudioRecorder:
                 pre_roll.append(data)
                 # Adapt noise floor slowly to room ambient acoustics
                 self.stream_noise_floor = 0.98 * self.stream_noise_floor + 0.02 * rms
-                effective_thresh = max(self.stream_noise_floor * 2.2, energy_threshold)
+                effective_thresh = max(self.stream_noise_floor * 2.2, 1050.0, energy_threshold)
 
                 if rms > effective_thresh:
                     consecutive_speech += 1
-                    # Require 100ms of sustained energy to ignore single clicks/crackle
-                    if consecutive_speech >= 2:
+                    # Require 200ms (4 consecutive chunks) of sustained vocal energy
+                    # This completely ignores single clicks, keystrokes, drum beats, and breath pops
+                    if consecutive_speech >= 4:
                         has_spoken = True
                         speech_chunks = list(pre_roll)
+                        active_speech_chunks = consecutive_speech
                         if on_speech_start:
                             try:
                                 on_speech_start()
@@ -172,20 +175,24 @@ class AudioRecorder:
                     consecutive_speech = 0
             else:
                 speech_chunks.append(data)
-                effective_thresh = max(self.stream_noise_floor * 1.8, energy_threshold * 0.9)
+                effective_thresh = max(self.stream_noise_floor * 1.8, 900.0, energy_threshold * 0.85)
 
-                if rms < effective_thresh:
+                if rms > effective_thresh:
+                    active_speech_chunks += 1
+                    silence_chunks = 0
+                else:
                     silence_chunks += 1
                     if silence_chunks >= silence_limit:
                         # User spoke and has now paused for silence_timeout -> done!
                         break
-                else:
-                    silence_chunks = 0
 
                 if len(speech_chunks) >= max_chunks:
                     break
 
-        if has_spoken and len(speech_chunks) >= 8:  # At least 400ms of speech
+        # A real spoken command must contain at least 6 active speech chunks (>= 300ms of active vocal energy)
+        # and at least 12 total chunks (>= 600ms total duration).
+        # Anything less is background noise, breath, or a transient click, and is safely discarded without entering processing.
+        if has_spoken and active_speech_chunks >= 6 and len(speech_chunks) >= 12:
             return self._write_wav(speech_chunks)
 
         return None
@@ -241,6 +248,7 @@ class AudioRecorder:
         speech_chunks = []
         has_spoken = False
         consecutive_speech = 0
+        active_speech_chunks = 0
         silence_chunks = 0
         silence_limit = max(15, int(silence_timeout / 0.05))
         max_chunks = int(max_duration / 0.05)
@@ -260,13 +268,14 @@ class AudioRecorder:
                 if not has_spoken:
                     pre_roll.append(data)
                     noise_floor = 0.98 * noise_floor + 0.02 * rms
-                    effective_thresh = max(noise_floor * 2.2, energy_threshold)
+                    effective_thresh = max(noise_floor * 2.2, 1000.0, energy_threshold)
 
                     if rms > effective_thresh:
                         consecutive_speech += 1
-                        if consecutive_speech >= 2:
+                        if consecutive_speech >= 3:
                             has_spoken = True
                             speech_chunks = list(pre_roll)
+                            active_speech_chunks = consecutive_speech
                             if on_speech_start:
                                 try:
                                     on_speech_start()
@@ -279,14 +288,15 @@ class AudioRecorder:
                             break
                 else:
                     speech_chunks.append(data)
-                    effective_thresh = max(noise_floor * 1.8, energy_threshold * 0.9)
+                    effective_thresh = max(noise_floor * 1.8, 850.0, energy_threshold * 0.85)
 
-                    if rms < effective_thresh:
+                    if rms > effective_thresh:
+                        active_speech_chunks += 1
+                        silence_chunks = 0
+                    else:
                         silence_chunks += 1
                         if silence_chunks >= silence_limit:
                             break
-                    else:
-                        silence_chunks = 0
 
                     if len(speech_chunks) >= max_chunks:
                         break
@@ -301,7 +311,7 @@ class AudioRecorder:
                     pass
 
         self.last_recording_had_speech = has_spoken
-        if has_spoken and len(speech_chunks) >= 8:
+        if has_spoken and active_speech_chunks >= 5 and len(speech_chunks) >= 10:
             return self._write_wav(speech_chunks)
 
         return None
@@ -352,14 +362,10 @@ class AudioRecorder:
         self.is_recording = False
         return self.current_wav_path
 
-    def play_feedback_tone(self, tone_type: str = "start") -> None:
-        """Play short feedback chime using system sounds."""
+    def play_feedback_tone(self, tone_type: str = "output") -> None:
+        """Play short feedback chime only when outputting response."""
         try:
-            sound_file = (
-                "/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga"
-                if tone_type == "start"
-                else "/usr/share/sounds/freedesktop/stereo/complete.oga"
-            )
+            sound_file = "/usr/share/sounds/freedesktop/stereo/complete.oga"
             if not os.path.exists(sound_file):
                 sound_file = "/usr/share/sounds/freedesktop/stereo/audio-volume-change.oga"
 

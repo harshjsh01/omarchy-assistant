@@ -40,8 +40,12 @@ class CommandRouter:
                 "category": "none"
             }
 
+        # Normalize text by stripping punctuation for exact phrase/greeting matching
+        norm_text = re.sub(r"[^\w\s]", " ", clean_text).strip()
+        norm_text = re.sub(r"\s+", " ", norm_text)
+
         # 1. Internal Daemon Controls
-        if re.search(r"\b(start new chat|new conversation|naya chat|reset chat|clear chat)\b", clean_text):
+        if re.search(r"\b(start new chat|new conversation|naya chat|reset chat|clear chat)\b", norm_text):
             new_id = self._create_new_antigravity_session()
             return {
                 "status": "matched",
@@ -52,7 +56,7 @@ class CommandRouter:
             }
 
         # 2. Fast direct liveness / greeting checks (instant response without waiting)
-        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max)$", clean_text):
+        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs|hey|hello|hi)$", norm_text):
             return {
                 "status": "matched",
                 "intent": "greeting",
@@ -61,7 +65,7 @@ class CommandRouter:
                 "category": "conversational"
             }
 
-        if re.search(r"^(are you alive|are you there|can you hear me|zinda ho|sun rahe ho)$", clean_text):
+        if re.search(r"^(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho)$", norm_text):
             return {
                 "status": "matched",
                 "intent": "liveness_check",
@@ -70,15 +74,19 @@ class CommandRouter:
                 "category": "conversational"
             }
 
-        # 3. Instant local hardware & media rules (10ms execution for volume, brightness, media, workspaces)
-        hardware_match = self._match_rules(clean_text)
-        if hardware_match and hardware_match.get("category") in ["audio", "media", "display", "hyprland"]:
+        # Strip leading wake words (e.g. "hey max open youtube" -> "open youtube")
+        stripped_prompt = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs)[,\s]+", "", clean_text, flags=re.IGNORECASE).strip()
+        if not stripped_prompt:
+            stripped_prompt = clean_text
+
+        # 3. Instant local hardware & media rules (10ms execution for volume, brightness, media, workspaces, monitoring)
+        hardware_match = self._match_rules(stripped_prompt)
+        if hardware_match and hardware_match.get("category") in ["audio", "media", "display", "hyprland", "apps", "system"]:
             return hardware_match
 
         # 4. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING ELSE!
-        # Send spoken transcript directly to the active Antigravity CLI session without alteration
-        prompt_text = text.strip()
-        llm_result = self._fallback_llm(prompt_text)
+        # Send stripped prompt directly to the active Antigravity CLI session without alteration
+        llm_result = self._fallback_llm(stripped_prompt)
         if llm_result:
             return llm_result
 
@@ -418,12 +426,12 @@ class CommandRouter:
                 "spoken_response": "Opening VS Code",
                 "category": "apps"
             }
-        if re.search(r"\b(open btop|system monitor|task manager|monitor kholo)\b", text):
+        if re.search(r"\b(open btop|system monitor|task manager|monitor kholo|monitor\s+(a\s+)?activity|system\s+activity|activity\s+monitor|check\s+activity)\b", text):
             return {
                 "status": "matched",
                 "intent": "launch_btop",
                 "command": "omarchy launch terminal -e btop &",
-                "spoken_response": "Opening system monitor",
+                "spoken_response": "Opening system activity monitor",
                 "category": "apps"
             }
         # --- Antigravity AI Agent (English + Hindi/Hinglish + phonetic mishearing tolerance) ---

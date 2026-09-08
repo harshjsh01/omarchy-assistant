@@ -188,19 +188,13 @@ class AssistantDaemon:
                 if self.tts.enabled:
                     self.tts.speak(greeting, wait=True)
 
-                if self.config.get("sound_feedback", True):
-                    self.recorder.play_feedback_tone("start")
-
                 # 2. Record audio with VAD
                 self.set_state("listening")
                 wav_path = self.recorder.record_with_vad(
                     max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 850.0)
+                    energy_threshold=self.config.get("silence_threshold_energy", 1000.0)
                 )
-
-                if self.config.get("sound_feedback", True):
-                    self.recorder.play_feedback_tone("stop")
 
                 if not wav_path or not os.path.exists(wav_path):
                     self.set_state("idle")
@@ -225,6 +219,11 @@ class AssistantDaemon:
                 # 4. Route intent
                 action = self.router.route(transcript)
                 self.last_action = action
+
+                # Play ting chime ONLY when there is output
+                if action.get("spoken_response") or action.get("command"):
+                    if self.config.get("sound_feedback", True):
+                        self.recorder.play_feedback_tone("output")
 
                 # 5. Execute action
                 self.set_state(
@@ -269,36 +268,38 @@ class AssistantDaemon:
         """
         import re
         clean = transcript.lower().strip()
-        if not clean or len(clean.split()) == 0:
+        norm = re.sub(r"[^\w\s]", " ", clean).strip()
+        if not norm or len(norm.split()) == 0:
             return False
 
         # Stop commands are always accepted
-        if any(p in clean for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
+        if any(p in norm for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
             return True
 
-        # If user is in an active conversational window (within 20s of previous turn)
+        # If user is in an active conversational window (within 30s of previous turn)
         if time.time() < getattr(self, "_dialogue_active_until", 0.0):
             return True
 
         # Wake phrases, names, and liveness inquiries
         wake_patterns = [
-            r"\b(hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|namaste\s+max)\b",
+            r"\b(hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|namaste\s+max|a\s+max|hey\s+marks|hey\s+macs)\b",
             r"\bmax\b",
-            r"\b(are you alive|are you there|can you hear me|you alive|zinda ho|sun rahe ho|kya tum zinda ho|kya tum sun rahe ho)\b",
+            r"\b(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho|kya\s+tum\s+zinda\s+ho|kya\s+tum\s+sun\s+rahe\s+ho)\b",
         ]
         for pat in wake_patterns:
-            if re.search(pat, clean):
+            if re.search(pat, norm):
                 return True
 
-        # Direct action and control commands (open, play, launch, volume, etc.)
+        # Direct action and control commands (open, play, launch, monitor, background, etc.)
         action_keywords = [
             "open", "launch", "play", "pause", "resume", "stop", "close", "kill",
             "volume", "mute", "unmute", "brightness", "switch", "workspace",
             "screenshot", "capture", "run", "start", "remember", "remind", "reminder",
+            "monitor", "activity", "background", "status", "process", "task", "health",
             "kholo", "band", "chalao", "bajao", "roko", "badhao", "kam karo", "dikhao",
-            "yaad"
+            "yaad", "kaam", "dekh", "sun"
         ]
-        if any(re.search(rf"\b{re.escape(k)}\b", clean) for k in action_keywords):
+        if any(re.search(rf"\b{re.escape(k)}\b", norm) for k in action_keywords):
             return True
 
         # Complex reasoning/brainstorming/coding queries intended for AI
@@ -309,8 +310,8 @@ class AssistantDaemon:
             "explain", "help", "think", "suggest", "search for",
             "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao"
         ]
-        words = clean.split()
-        if any(k in clean for k in complex_keywords) and len(words) >= 2:
+        words = norm.split()
+        if any(k in norm for k in complex_keywords) and len(words) >= 2:
             return True
 
         return False
@@ -345,7 +346,7 @@ class AssistantDaemon:
                 # 2. Record next utterance from persistent stream
                 wav_path = self.recorder.listen_turn(
                     silence_timeout=self.config.get("silence_duration_seconds", 1.1),
-                    energy_threshold=self.config.get("silence_threshold_energy", 850.0),
+                    energy_threshold=self.config.get("silence_threshold_energy", 1050.0),
                     on_speech_start=on_speech_start_callback,
                     is_active=lambda: self.continuous_mode,
                     max_duration=self.config.get("max_record_seconds", 12.0)
@@ -367,8 +368,6 @@ class AssistantDaemon:
                 # User spoke: transition to processing (animated yellow dots)
                 self.is_busy = True
                 self.set_state("processing")
-                if self.config.get("sound_feedback", True):
-                    self.recorder.play_feedback_tone("stop")
 
                 transcript = self.stt.transcribe(wav_path)
                 self.current_transcript = transcript
@@ -404,8 +403,8 @@ class AssistantDaemon:
                     time.sleep(0.05)
                     continue
 
-                # Refresh dialogue active timer (25 seconds for natural follow-ups without repeating Hey Max)
-                self._dialogue_active_until = time.time() + 25.0
+                # Refresh dialogue active timer (30 seconds for natural follow-ups without repeating Hey Max)
+                self._dialogue_active_until = time.time() + 30.0
 
                 # 4. Route intent
                 action = self.router.route(transcript)
@@ -419,6 +418,11 @@ class AssistantDaemon:
                         self.tts.speak(action["spoken_response"], wait=True)
                     self.set_state("idle")
                     break
+
+                # Play ting chime ONLY when there is output
+                if action.get("spoken_response") or action.get("command"):
+                    if self.config.get("sound_feedback", True):
+                        self.recorder.play_feedback_tone("output")
 
                 # 5. Execute action
                 self.set_state(
@@ -442,9 +446,6 @@ class AssistantDaemon:
                 # Delay slightly so room acoustic echo clears, and drain any speaker audio from the pipe
                 time.sleep(0.4)
                 self.recorder.drain_stream()
-
-                if self.continuous_mode and self.config.get("sound_feedback", True):
-                    self.recorder.play_feedback_tone("start")
                 self.set_state("continuous_standby")
 
             except Exception as e:

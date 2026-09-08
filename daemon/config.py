@@ -32,7 +32,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Audio recording settings
     "sample_rate": 16000,
     "max_record_seconds": 12,
-    "silence_threshold_energy": 850,
+    "silence_threshold_energy": 1050,
     "silence_duration_seconds": 1.1,
     "min_record_seconds": 0.8,
 
