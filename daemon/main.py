@@ -188,9 +188,9 @@ class AssistantDaemon:
 
                 # 2. Record audio with VAD
                 wav_path = self.recorder.record_with_vad(
-                    max_duration=self.config.get("max_record_seconds", 10.0),
+                    max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 300.0)
+                    energy_threshold=self.config.get("silence_threshold_energy", 2200.0)
                 )
 
                 if self.config.get("sound_feedback", True):
@@ -259,15 +259,14 @@ class AssistantDaemon:
 
     def _is_addressed_to_max(self, transcript: str) -> bool:
         """
-        Check if speech during continuous mode is directed at Max.
-        Allows natural conversation without wake word during active dialogue window.
+        Check if speech during continuous mode is directed at Max or is an intentional query.
         """
         import re
         clean = transcript.lower().strip()
-        if not clean:
+        if not clean or len(clean.split()) == 0:
             return False
 
-        # If user is in an active conversational window (within 20s of previous turn), user is in a dialogue with Max
+        # If user is in an active conversational window (within 20s of previous turn)
         if time.time() < getattr(self, "_dialogue_active_until", 0.0):
             return True
 
@@ -284,6 +283,18 @@ class AssistantDaemon:
         for pat in wake_patterns:
             if re.search(pat, clean):
                 return True
+
+        # Complex reasoning/brainstorming/coding queries intended for AI
+        complex_keywords = [
+            "brainstorm", "project", "idea", "plan", "build", "create", "code", "develop",
+            "documentation", "docs", "write", "design", "system", "architecture", "script",
+            "how", "why", "what", "who", "where", "when", "can you", "could you", "tell me",
+            "explain", "help", "think", "suggest", "search for",
+            "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao"
+        ]
+        words = clean.split()
+        if any(k in clean for k in complex_keywords) and len(words) >= 3:
+            return True
 
         return False
 
@@ -310,11 +321,11 @@ class AssistantDaemon:
                     if self.continuous_mode:
                         self.set_state("listening")
 
-                # 2. Record audio with VAD (stops automatically when user pauses speaking)
+                # 2. Record audio with dynamic VAD (stops automatically when user pauses speaking)
                 wav_path = self.recorder.record_with_vad(
                     max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 300.0),
+                    energy_threshold=self.config.get("silence_threshold_energy", 2200.0),
                     on_speech_start=on_speech_start_callback,
                     idle_timeout=3.5
                 )
@@ -369,16 +380,6 @@ class AssistantDaemon:
                     self.set_state("idle")
                     break
 
-                # Filter: check if addressed to Max (wake word, liveness, or active dialogue window)
-                if not self._is_addressed_to_max(transcript):
-                    print(f"[omarchy-assistant] [Continuous] Ignored non-addressed speech in standby: '{transcript}'")
-                    self.set_state("continuous_standby")
-                    time.sleep(0.1)
-                    continue
-
-                # Refresh dialogue active timer (20 seconds for natural follow-ups without repeating Hey Max)
-                self._dialogue_active_until = time.time() + 20.0
-
                 # 4. Route intent
                 action = self.router.route(transcript)
                 self.last_action = action
@@ -390,6 +391,25 @@ class AssistantDaemon:
                         self.tts.speak(action["spoken_response"], wait=True)
                     self.set_state("idle")
                     break
+
+                # In continuous mode:
+                # 1. Matched system commands (open youtube, volume, browser, terminal, etc.) execute immediately!
+                # 2. Conversational / Antigravity commands are only sent if user intentionally addressed Max,
+                #    asked an explicit query, or is in an ongoing dialog turn (so background speech is not fed to AI).
+                is_addressed = self._is_addressed_to_max(transcript)
+                is_direct_command = (action.get("status") == "matched" and action.get("category") != "unknown")
+
+                if action.get("intent") in ["greeting", "liveness_check"]:
+                    is_addressed = True
+
+                if not is_addressed and not is_direct_command:
+                    print(f"[omarchy-assistant] [Continuous] Ignored non-command speech in standby: '{transcript}'")
+                    self.set_state("continuous_standby")
+                    time.sleep(0.05)
+                    continue
+
+                # Refresh dialogue active timer (20 seconds for natural follow-ups without repeating Hey Max)
+                self._dialogue_active_until = time.time() + 20.0
 
                 # 5. Execute action
                 self.set_state(

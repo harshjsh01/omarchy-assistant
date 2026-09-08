@@ -249,6 +249,9 @@ class WhisperCppEngine(BaseSTTEngine):
                 "-m", self.model_path,
                 "-f", wav_path,
                 "-nt",
+                "-sns",
+                "-mc", "0",
+                "-nth", "0.65",
                 "--no-prints",
                 "-l", self.language,
                 "-t", "4",
@@ -264,7 +267,19 @@ class WhisperCppEngine(BaseSTTEngine):
                     no_brackets = re.sub(r"\[.*?\]", "", cleaned).strip()
                     if no_brackets:
                         lines.append(no_brackets)
-            return " ".join(lines).strip()
+            text = " ".join(lines).strip()
+
+            # Reject known silence artifacts and hallucinations
+            hallucinations = {
+                "halt", "halt.", "halt,", "thank you", "thank you.", "thanks for watching",
+                "subtitles by", "bye", "you", "amara.org", "subtitle", "transcription",
+                "[music]", "[applause]", "[silence]", ".", "..", "...", "you.", "a"
+            }
+            norm = text.lower().strip(" ,.!?-")
+            if not norm or norm in hallucinations or text.lower() in hallucinations:
+                return ""
+
+            return text
         except Exception as e:
             return ""
 

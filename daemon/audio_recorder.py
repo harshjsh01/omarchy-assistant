@@ -121,24 +121,27 @@ class AudioRecorder:
 
     def record_with_vad(
         self,
-        max_duration: float = 10.0,
+        max_duration: float = 12.0,
         silence_timeout: float = 1.2,
-        energy_threshold: float = 300.0,
+        energy_threshold: float = 2200.0,
         on_speech_start=None,
-        idle_timeout: float = 4.0
+        idle_timeout: float = 3.5
     ) -> Optional[str]:
         """
         Record audio with automatic silence detection (VAD).
         Stops automatically when user stops speaking after saying a command.
         Calls on_speech_start() the moment speech is detected.
+        Dynamically adapts against ambient noise floor to prevent false speech detection.
         """
         self.start_recording()
         start = time.time()
         has_spoken = False
         silence_start: Optional[float] = None
+        ambient_samples = []
+        effective_threshold = max(2000.0, energy_threshold)
 
         # Brief initial pause to let audio driver spin up
-        time.sleep(0.15)
+        time.sleep(0.12)
 
         while (time.time() - start) < max_duration:
             time.sleep(0.08)
@@ -159,7 +162,13 @@ class AudioRecorder:
                                 shorts = struct.unpack(f"<{count}h", raw_data[:count * 2])
                                 rms = math.sqrt(sum(s * s for s in shorts) / count)
 
-                                if rms > energy_threshold:
+                                # Adapt threshold during initial ambient audio
+                                if not has_spoken and len(ambient_samples) < 5:
+                                    ambient_samples.append(rms)
+                                    baseline = sum(ambient_samples) / len(ambient_samples)
+                                    effective_threshold = max(effective_threshold, baseline * 1.45 + 400.0)
+
+                                if rms > effective_threshold:
                                     if not has_spoken:
                                         has_spoken = True
                                         if on_speech_start:
@@ -182,7 +191,14 @@ class AudioRecorder:
                 pass
 
         self.last_recording_had_speech = has_spoken
-        return self.stop_recording()
+        wav_path = self.stop_recording()
+        if not has_spoken and wav_path and os.path.exists(wav_path):
+            try:
+                os.unlink(wav_path)
+            except OSError:
+                pass
+            return None
+        return wav_path
 
     def play_feedback_tone(self, tone_type: str = "start") -> None:
         """Play short feedback chime using system sounds or synthetic beep."""
