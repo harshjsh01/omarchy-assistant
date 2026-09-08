@@ -85,19 +85,25 @@ class CommandRouter:
         if not stripped_prompt:
             stripped_prompt = clean_text
 
-        # 3. Instant local hardware & media rules (10ms execution for volume, brightness, media, workspaces, monitoring)
+        # 3. Compound multi-action commands (e.g. "in workspace 3, open YouTube and open terminal also")
+        compound_match = self._match_compound(stripped_prompt)
+        if compound_match:
+            self._log_chat(text, f"Executed: `{compound_match.get('command')}`", compound_match.get("spoken_response", ""))
+            return compound_match
+
+        # 4. Instant local hardware & media rules (10ms execution for volume, brightness, media, workspaces, monitoring)
         hardware_match = self._match_rules(stripped_prompt)
         if hardware_match and hardware_match.get("category") in ["audio", "media", "display", "hyprland", "apps", "system"]:
             self._log_chat(text, f"Executed: `{hardware_match.get('command')}`", hardware_match.get("spoken_response", ""))
             return hardware_match
 
-        # 4. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING ELSE!
+        # 5. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING ELSE!
         # Send stripped prompt directly to the active Antigravity CLI session without alteration
         llm_result = self._fallback_llm(stripped_prompt)
         if llm_result:
             return llm_result
 
-        # 5. Fallback to matched rules if Antigravity is offline
+        # 6. Fallback to matched rules if Antigravity is offline
         if hardware_match:
             return hardware_match
 
@@ -108,6 +114,62 @@ class CommandRouter:
             "spoken_response": f"I heard '{text}'.",
             "category": "none"
         }
+
+    def _match_compound(self, text: str) -> Optional[Dict[str, Any]]:
+        """Parse multi-action compound commands (e.g. workspace switch + launching multiple apps)."""
+        clean = text.lower()
+        num_map = {
+            'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
+            'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
+            'ek': '1', 'do': '2', 'teen': '3', 'char': '4', 'paanch': '5',
+            'chhe': '6', 'saat': '7', 'aath': '8', 'nau': '9', 'dus': '10',
+            'एक': '1', 'दो': '2', 'तीन': '3', 'चार': '4', 'पाँच': '5',
+            'छह': '6', 'सात': '7', 'आठ': '8', 'नौ': '9', 'दस': '10'
+        }
+        cmds = []
+        actions = []
+
+        # 1. Workspace
+        m_ws = re.search(r'\b(?:in|on|to|into|switch to)?\s*(?:workspace|वर्कस्पेस)\s*([0-9]|one|two|three|four|five|six|seven|eight|nine|ten|ek|do|teen|char|paanch|chhe|saat|aath|nau|dus|एक|दो|तीन|चार|पाँच|छह|सात|आठ|नौ|दस)\b', clean)
+        if m_ws:
+            raw_num = m_ws.group(1)
+            ws_num = num_map.get(raw_num, raw_num)
+            cmds.append(f"hyprctl dispatch 'hl.dsp.focus({{ workspace = \"{ws_num}\" }})'")
+            actions.append(f'switched to workspace {ws_num}')
+
+        # 2. YouTube
+        if re.search(r'\b(youtube|yt|यूट्यूब)\b', clean):
+            cmds.append("omarchy launch browser 'https://youtube.com'")
+            actions.append('opened YouTube')
+        # 3. Browser (if not only youtube)
+        elif re.search(r'\b(browser|chromium|chrome|web|ब्राउज़र)\b', clean):
+            cmds.append('omarchy launch browser')
+            actions.append('opened browser')
+
+        # 4. Terminal
+        if re.search(r'\b(terminal|foot|kitty|console|टर्मिनल)\b', clean):
+            cmds.append('omarchy launch terminal')
+            actions.append('opened terminal')
+
+        # 5. Code / VS Code
+        if re.search(r'\b(vs\s*code|vscode|code\s*editor|neovim|editor|कोड)\b', clean):
+            cmds.append('code || omarchy launch terminal -e nvim')
+            actions.append('opened editor')
+
+        if len(cmds) >= 2:
+            combined_cmd = '; '.join(cmds)
+            if len(actions) == 2:
+                spoken = f'{actions[0].capitalize()} and {actions[1]}.'
+            else:
+                spoken = f'{actions[0].capitalize()}, ' + ', '.join(actions[1:-1]) + f' and {actions[-1]}.'
+            return {
+                'status': 'matched',
+                'intent': 'compound_action',
+                'command': combined_cmd,
+                'spoken_response': spoken,
+                'category': 'apps'
+            }
+        return None
 
     def _match_rules(self, text: str) -> Optional[Dict[str, Any]]:
         # --- Audio & Volume (English + Hindi/Hinglish) ---

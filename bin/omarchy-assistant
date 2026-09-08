@@ -135,8 +135,9 @@ case "$cmd" in
         fi
 
         case "$mode" in
-            --cli|cli|interactive)
-                echo "🤖 Attaching to active Antigravity CLI session (Conversation: ${active_cid:-latest})..."
+            --cli|-cli|cli|interactive)
+                echo "🤖 Attaching to Antigravity CLI session (Conversation: ${active_cid:-latest})..."
+                echo "💡 Tip: To view the live log of all voice commands and actions, run: omarchy-assistant chat"
                 if [[ -n "$active_cid" ]]; then
                     exec agy --conversation "$active_cid"
                 else

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "harshjsh01.assistant",
-  "name": "Omarchy Voice Assistant",
+  "name": "Bro Voice Assistant",
   "version": "1.0.0",
   "author": "Harsh Joshi",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "Voice Assistant",
+    "displayName": "Bro Assistant",
     "description": "Voice command indicator, visual feedback HUD, and push-to-talk button",
     "category": "System",
     "allowMultiple": false,
