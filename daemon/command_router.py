@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import urllib.request
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 
@@ -56,32 +57,40 @@ class CommandRouter:
             }
 
         # 2. Fast direct liveness / greeting checks (instant response without waiting)
-        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs|hey|hello|hi)$", norm_text):
+        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs|kmax|he\s+makes|hey|hello|hi|हे\s*मैक्स|मैक्स|नमस्ते\s*मैक्स|सुनो\s*मैक्स|नमस्ते|प्रणाम|हाय|हेलो)$", norm_text):
+            spoken = "हाँ, मैं सुन रहा हूँ। कहिए, क्या काम है?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes, I am live. What would you like to do?"
             return {
                 "status": "matched",
                 "intent": "greeting",
                 "command": "",
-                "spoken_response": "Yes, I am live. What would you like to do?",
+                "spoken_response": spoken,
                 "category": "conversational"
             }
 
-        if re.search(r"^(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho)$", norm_text):
+        if re.search(r"^(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho|क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो)$", norm_text):
+            spoken = "हाँ, मैं बिल्कुल लाइव और तैयार हूँ। आज मैं आपकी क्या मदद करूँ?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes, I am alive and listening! How may I assist you?"
             return {
                 "status": "matched",
                 "intent": "liveness_check",
                 "command": "",
-                "spoken_response": "Yes, I am alive and listening! How may I assist you?",
+                "spoken_response": spoken,
                 "category": "conversational"
             }
 
-        # Strip leading wake words (e.g. "hey max open youtube" -> "open youtube")
-        stripped_prompt = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs)[,\s]+", "", clean_text, flags=re.IGNORECASE).strip()
+        # Strip leading wake words (English, Hinglish, Devanagari)
+        stripped_prompt = re.sub(
+            r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max|a\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max|हे\s*मैक्स|मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स)[,\s]+",
+            "",
+            clean_text,
+            flags=re.IGNORECASE
+        ).strip()
         if not stripped_prompt:
             stripped_prompt = clean_text
 
         # 3. Instant local hardware & media rules (10ms execution for volume, brightness, media, workspaces, monitoring)
         hardware_match = self._match_rules(stripped_prompt)
         if hardware_match and hardware_match.get("category") in ["audio", "media", "display", "hyprland", "apps", "system"]:
+            self._log_chat(text, f"Executed: `{hardware_match.get('command')}`", hardware_match.get("spoken_response", ""))
             return hardware_match
 
         # 4. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING ELSE!
@@ -104,20 +113,23 @@ class CommandRouter:
 
     def _match_rules(self, text: str) -> Optional[Dict[str, Any]]:
         # --- Audio & Volume (English + Hindi/Hinglish) ---
-        if re.search(r"\b(volume up|increase volume|louder|sound up|aa?wa?a?[zj] badhao|volume badhao|aa?wa?a?[zj] badha do|aawaz badhao)\b", text):
+        # --- Audio & Volume (English + Hindi/Hinglish + Devanagari) ---
+        if re.search(r"\b(volume up|increase volume|louder|sound up|aa?wa?a?[zj] badhao|volume badhao|aa?wa?a?[zj] badha do|aawaz badhao)\b|(वॉल्यूम\s*बढ़ाओ|आवाज़\s*बढ़ाओ|आवाज़\s*तेज़\s*करो|साउंड\s*बढ़ाओ)", text, re.IGNORECASE):
+            spoken = "वॉल्यूम बढ़ा दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Volume up"
             return {
                 "status": "matched",
                 "intent": "volume_up",
                 "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+",
-                "spoken_response": "Volume up",
+                "spoken_response": spoken,
                 "category": "audio"
             }
-        if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume|aa?wa?a?[zj] kam karo|volume kam karo|aa?wa?a?[zj] dheemi karo|aawaz kam karo)\b", text):
+        if re.search(r"\b(volume down|decrease volume|softer|sound down|lower volume|aa?wa?a?[zj] kam karo|volume kam karo|aa?wa?a?[zj] dheemi karo|aawaz kam karo)\b|(वॉल्यूम\s*कम\s*करो|आवाज़\s*कम\s*करो|आवाज़\s*धीमी\s*करो|साउंड\s*कम\s*करो)", text, re.IGNORECASE):
+            spoken = "वॉल्यूम कम कर दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Volume down"
             return {
                 "status": "matched",
                 "intent": "volume_down",
                 "command": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
-                "spoken_response": "Volume down",
+                "spoken_response": spoken,
                 "category": "audio"
             }
         m = re.search(r"\b(set volume to|volume)\s*(\d{1,3})\s*(percent|%)?\b", text)
@@ -130,7 +142,7 @@ class CommandRouter:
                 "spoken_response": f"Volume set to {vol} percent",
                 "category": "audio"
             }
-        if re.search(r"\b(mute microphone|mute mic|mic band karo|mike band karo|mic mute karo)\b", text):
+        if re.search(r"\b(mute microphone|mute mic|mic band karo|mike band karo|mic mute karo)\b|(माइक\s*बंद\s*करो|माइक\s*म्यूट\s*करो)", text, re.IGNORECASE):
             return {
                 "status": "matched",
                 "intent": "mute_mic",
@@ -138,7 +150,7 @@ class CommandRouter:
                 "spoken_response": "Microphone muted",
                 "category": "audio"
             }
-        if re.search(r"\b(unmute microphone|unmute mic|mic chalu karo|mic on karo|unmute mic karo)\b", text):
+        if re.search(r"\b(unmute microphone|unmute mic|mic chalu karo|mic on karo|unmute mic karo)\b|(माइक\s*चालू\s*करो|माइक\s*ऑन\s*करो)", text, re.IGNORECASE):
             return {
                 "status": "matched",
                 "intent": "unmute_mic",
@@ -146,22 +158,57 @@ class CommandRouter:
                 "spoken_response": "Microphone unmuted",
                 "category": "audio"
             }
-        if re.search(r"\b(mute audio|mute sound|mute|unmute|aa?wa?a?[zj] band karo|chup karo)\b", text):
+        if re.search(r"\b(mute audio|mute sound|mute|unmute|aa?wa?a?[zj] band karo|chup karo)\b|(वॉल्यूम\s*बंद\s*करो|आवाज़\s*बंद\s*करो|म्यूट\s*करो)", text, re.IGNORECASE):
+            spoken = "म्यूट टॉगल कर दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Toggled mute"
             return {
                 "status": "matched",
                 "intent": "toggle_mute",
                 "command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-                "spoken_response": "Toggled mute",
+                "spoken_response": spoken,
                 "category": "audio"
             }
 
+        # --- Live CLI Chat Command ---
+        if re.search(r"\b(open chat|show chat|view chat|cli chat|chat kholo|open cli chat)\b|(चैट\s*खोलो|चैट\s*दिखाओ|बातचीत\s*दिखाओ)", text, re.IGNORECASE):
+            return {
+                "status": "matched",
+                "intent": "open_chat",
+                "command": "omarchy launch terminal -e omarchy-assistant chat",
+                "spoken_response": "Opening live assistant chat in terminal.",
+                "category": "apps"
+            }
+
+        # --- Terminal & Browser Launches ---
+        if re.search(r"\b(open terminal|terminal kholo|launch terminal)\b|(टर्मिनल\s*खोलो|टर्मिनल\s*चलाओ|टर्मिनल\s*ऑन\s*करो)", text, re.IGNORECASE):
+            spoken = "टर्मिनल खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening terminal"
+            return {
+                "status": "matched",
+                "intent": "open_terminal",
+                "command": "omarchy launch terminal",
+                "spoken_response": spoken,
+                "category": "apps"
+            }
+        if re.search(r"\b(open browser|browser kholo|launch browser)\b|(ब्राउज़र\s*खोलो|ब्राउज़र\s*चलाओ)", text, re.IGNORECASE):
+            spoken = "ब्राउज़र खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening browser"
+            return {
+                "status": "matched",
+                "intent": "open_browser",
+                "command": "omarchy launch browser",
+                "spoken_response": spoken,
+                "category": "apps"
+            }
+
         # --- Specific Media Destination (YouTube, Spotify, Web) ---
-        # 1. YouTube playback and search
+        # 1. YouTube playback and search (English, Hinglish, Devanagari Hindi)
         m_yt = re.search(r"\b(?:play|search for|search|listen to)\s+(?:a\s+|the\s+)?(?:song|track|music|video)?\s*(?:called|named)?\s*(.*?)\s*(?:on|in|from)\s*(?:youtube|yt)\b", text, re.IGNORECASE)
         if not m_yt:
             m_yt = re.search(r"\b(?:on|in)\s+(?:youtube|yt)\s+(?:play|search for|search|listen to)\s+(.*)\b", text, re.IGNORECASE)
         if not m_yt:
             m_yt = re.search(r"\byoutube\s+(?:par|pe)\s+(.*?)\s*(?:chalao|bajao|kholo|play karo)\b", text, re.IGNORECASE)
+        if not m_yt:
+            m_yt = re.search(r"(?:यूट्यूब|yt)\s*(?:पर|पे)?\s*(.*?)\s*(?:चलाओ|खोलो|बजाओ|लगाओ|प्ले\s*करो|सर्च\s*करो)", text, re.IGNORECASE)
+        if not m_yt:
+            m_yt = re.search(r"(?:चलाओ|बजाओ|लगाओ|सुनो)\s*(.*?)\s*(?:यूट्यूब|yt)\s*(?:पर|पे)?", text, re.IGNORECASE)
         if not m_yt:
             m_yt = re.search(r"\b(?:open\s+youtube\s+and\s+play|play\s+on\s+youtube)\s*(.*)\b", text, re.IGNORECASE)
 
@@ -169,32 +216,36 @@ class CommandRouter:
             query = m_yt.group(1).strip()
             # Clean up filler words like "song", "track", "music", "please", "some"
             query = re.sub(r"^(?:a\s+|some\s+|any\s+|the\s+)?(?:song|music|track|video)(?:\s+called|\s+named)?\s*", "", query, flags=re.IGNORECASE).strip()
-            query = re.sub(r"^(?:please|kindly|jarur)\s*", "", query, flags=re.IGNORECASE).strip()
+            query = re.sub(r"^(?:गाना|गीत|वीडियो|म्यूजिक)\s*", "", query, flags=re.IGNORECASE).strip()
+            query = re.sub(r"^(?:please|kindly|jarur|कृपया)\s*", "", query, flags=re.IGNORECASE).strip()
             import urllib.parse
             if query:
                 encoded = urllib.parse.quote_plus(query)
+                spoken = f"यूट्यूब पर {query} चला रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else f"Playing {query} on YouTube"
                 return {
                     "status": "matched",
                     "intent": "play_youtube",
                     "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
-                    "spoken_response": f"Playing {query} on YouTube",
+                    "spoken_response": spoken,
                     "category": "apps"
                 }
             else:
+                spoken = "यूट्यूब खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening YouTube"
                 return {
                     "status": "matched",
                     "intent": "open_youtube",
                     "command": "omarchy launch browser 'https://youtube.com'",
-                    "spoken_response": "Opening YouTube",
+                    "spoken_response": spoken,
                     "category": "apps"
                 }
 
-        if re.search(r"\b(open youtube|youtube kholo|play youtube|launch youtube)\b", text):
+        if re.search(r"\b(open youtube|youtube kholo|play youtube|launch youtube)\b|(यूट्यूब\s*खोलो|यूट्यूब\s*चलाओ|ओपन\s*यूट्यूब)", text, re.IGNORECASE):
+            spoken = "यूट्यूब खोल रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Opening YouTube"
             return {
                 "status": "matched",
                 "intent": "open_youtube",
                 "command": "omarchy launch browser 'https://youtube.com'",
-                "spoken_response": "Opening YouTube",
+                "spoken_response": spoken,
                 "category": "apps"
             }
 
@@ -202,6 +253,8 @@ class CommandRouter:
         m_sp = re.search(r"\b(?:play|listen to)\s+(?:a\s+|the\s+)?(?:song|track|music)?\s*(?:called|named)?\s*(.*?)\s*(?:on|in)\s*spotify\b", text, re.IGNORECASE)
         if not m_sp:
             m_sp = re.search(r"\bspotify\s+(?:par|pe)\s+(.*?)\s*(?:chalao|bajao|kholo|play karo)\b", text, re.IGNORECASE)
+        if not m_sp:
+            m_sp = re.search(r"स्पॉटिफ़ाई\s*(?:पर|पे)?\s*(.*?)\s*(?:चलाओ|बजाओ|खोलो)", text, re.IGNORECASE)
         if m_sp:
             query = m_sp.group(1).strip()
             query = re.sub(r"^(?:a\s+|some\s+|the\s+)?(?:song|music|track)(?:\s+called|\s+named)?\s*", "", query, flags=re.IGNORECASE).strip()
@@ -224,7 +277,32 @@ class CommandRouter:
                     "category": "apps"
                 }
 
-        # 3. Direct song playback request (e.g. "play seedhe maut", "play bohemian rhapsody")
+        # 3. Direct song playback request in English or Hindi Devanagari
+        m_dev_song = re.search(r"(.*?)\s*(?:का\s*गाना|गाना|गीत)\s*(?:चलाओ|बजाओ|लगाओ|सुनाओ)", text)
+        if not m_dev_song:
+            m_dev_song = re.search(r"(?:गाना|गीत)\s*(?:चलाओ|बजाओ|लगाओ|सुनाओ)\s*(.*)", text)
+        if m_dev_song:
+            target = m_dev_song.group(1).strip()
+            target = re.sub(r"^(?:कोई\s*अच्छा|कोई|एक)\s*", "", target).strip()
+            import urllib.parse
+            if target and target not in ["चलाओ", "बजाओ", "लगाओ", "सुनाओ", ""]:
+                encoded = urllib.parse.quote_plus(target + " song")
+                return {
+                    "status": "matched",
+                    "intent": "play_youtube",
+                    "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
+                    "spoken_response": f"यूट्यूब पर {target} का गाना चला रहा हूँ।",
+                    "category": "apps"
+                }
+            else:
+                return {
+                    "status": "matched",
+                    "intent": "play_youtube",
+                    "command": "omarchy launch browser 'https://www.youtube.com/results?search_query=top+hindi+songs'",
+                    "spoken_response": "यूट्यूब पर गाने चला रहा हूँ।",
+                    "category": "apps"
+                }
+
         m_song = re.search(r"^(?:play|listen to)\s+(?:song\s+|music\s+|track\s+)?([a-zA-Z0-9\s]+)$", text, re.IGNORECASE)
         if m_song:
             target = m_song.group(1).strip()
@@ -240,21 +318,47 @@ class CommandRouter:
                     "category": "apps"
                 }
 
+        m_hinglish_song = re.search(r"^(.*?)\s+(?:ka\s+gaana\s+)?(?:bajao|chalao|play karo)$", text, re.IGNORECASE)
+        if m_hinglish_song:
+            target = m_hinglish_song.group(1).strip()
+            target = re.sub(r"^(?:koi\s+achha|koi|ek)\s*", "", target, flags=re.IGNORECASE).strip()
+            if target.lower() in ["kuch", "kuchh", "koi gaana", "koi gana", "koi song", "achha gaana", "achha gana"]:
+                return {
+                    "status": "matched",
+                    "intent": "play_youtube",
+                    "command": "omarchy launch browser 'https://www.youtube.com/results?search_query=top+hindi+songs'",
+                    "spoken_response": "Playing popular songs on YouTube",
+                    "category": "apps"
+                }
+            if target.lower() not in ["gaana", "gana", "music", "song", "audio", ""]:
+                import urllib.parse
+                encoded = urllib.parse.quote_plus(target + " song")
+                spoken = f"यूट्यूब पर {target} चला रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else f"Playing {target} on YouTube"
+                return {
+                    "status": "matched",
+                    "intent": "play_youtube",
+                    "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
+                    "spoken_response": spoken,
+                    "category": "apps"
+                }
+
         # --- Media Playback Controls (ONLY for toggling currently playing audio) ---
-        if re.search(r"^(pause|pause music|pause video|pause playback|stop playback|gaana roko|gana roko|roko)$", text):
+        if re.search(r"^(pause|pause music|pause video|pause playback|stop playback|gaana roko|gana roko|roko|गाना\s*रोको|रोको|पॉज़\s*करो|बंद\s*करो)$", text):
+            spoken = "पॉज़ कर दिया है।" if re.search(r"[\u0900-\u097f]", text) else "Paused"
             return {
                 "status": "matched",
                 "intent": "media_pause",
                 "command": "playerctl pause 2>/dev/null || true",
-                "spoken_response": "Paused",
+                "spoken_response": spoken,
                 "category": "media"
             }
-        if re.search(r"^(play|resume|play music|resume music|play track|resume track|continue playback|gaana bajao|gana bajao|gaana chalao|gana chalao)$", text):
+        if re.search(r"^(play|resume|play music|resume music|play track|resume track|continue playback|gaana bajao|gana bajao|gaana chalao|gana chalao|गाना\s*चलाओ|चलाओ|बजाओ|रिज्यूम\s*करो)$", text):
+            spoken = "प्ले कर रहा हूँ।" if re.search(r"[\u0900-\u097f]", text) else "Playing"
             return {
                 "status": "matched",
                 "intent": "media_play",
                 "command": "playerctl play-pause 2>/dev/null || true",
-                "spoken_response": "Playing",
+                "spoken_response": spoken,
                 "category": "media"
             }
         if re.search(r"\b(next song|next track|skip song|skip track|next|agla gaana|agla gana)\b", text):
@@ -963,6 +1067,10 @@ class CommandRouter:
                             spoken_text = clean_voice
 
                     spoken_text = spoken_text.replace("\n", " ").strip()
+
+                    # Real-time chat logging to ~/Work/CHAT.md for live CLI viewing
+                    self._log_chat(prompt, ans, spoken_text)
+
                     return {
                         "status": "matched",
                         "intent": "max_antigravity_ai",
@@ -1183,3 +1291,40 @@ class CommandRouter:
             "spoken_response": f"I heard '{prompt}'. I am Max, and I am here to help you.",
             "category": "conversational"
         }
+
+    def _log_chat(self, user_prompt: str, assistant_response: str, spoken: str = ""):
+        """Appends conversation turn to ~/Work/chat/CHAT.md and ensures ~/Work/CHAT.md symlink exists."""
+        try:
+            import datetime
+            chat_dir = Path.home() / "Work" / "chat"
+            chat_dir.mkdir(parents=True, exist_ok=True)
+            chat_file = chat_dir / "CHAT.md"
+            symlink_file = Path.home() / "Work" / "CHAT.md"
+
+            if not chat_file.exists():
+                chat_file.write_text(
+                    "# 💬 Max Voice Assistant Live Chat Log\n"
+                    "*Real-time conversational log between you and Max (powered by Google Gemini via Antigravity).*\n"
+                    "- **CLI Command to View:** `omarchy-assistant chat`\n"
+                    "- **Interactive CLI Session:** `omarchy-assistant chat --cli`\n\n"
+                    "---\n\n",
+                    encoding="utf-8"
+                )
+
+            if not symlink_file.exists() and not symlink_file.is_symlink():
+                try:
+                    symlink_file.symlink_to(chat_file)
+                except Exception:
+                    pass
+
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            entry = f"### 👤 You [{now_str}]\n> {user_prompt}\n\n### 🤖 Max (Antigravity Gemini)\n{assistant_response}\n\n"
+            if spoken:
+                entry += f"**Spoken Summary:** *{spoken}*\n\n"
+            entry += "---\n\n"
+
+            with open(chat_file, "a", encoding="utf-8") as f:
+                f.write(entry)
+        except Exception as e:
+            print(f"[omarchy-assistant] Failed to log chat: {e}", file=sys.stderr)
+

@@ -273,46 +273,64 @@ class AssistantDaemon:
         if not norm or len(norm.split()) == 0:
             return False
 
-        # Stop commands are always accepted
-        if any(p in norm for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
+        # Stop commands are always accepted (English, Hinglish, and Hindi)
+        stop_patterns = [
+            r"\b(stop listening|stop continuous|go to sleep|chup ho jao|sleep now|chup raho|exit continuous)\b",
+            r"(सुनना\s*बंद\s*करो|शांत\s*हो\s*जाओ|चुप\s*हो\s*जाओ|सो\s*जाओ|रुक\s*जाओ)"
+        ]
+        if any(re.search(p, clean, re.IGNORECASE) for p in stop_patterns):
             return True
 
         # If user is in an active conversational window (within 30s of previous turn)
         if time.time() < getattr(self, "_dialogue_active_until", 0.0):
             return True
 
-        # Wake phrases, names, and liveness inquiries
+        # Wake phrases, names, and liveness inquiries (English, Hinglish, Devanagari Hindi)
         wake_patterns = [
-            r"\b(hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|namaste\s+max|a\s+max|hey\s+marks|hey\s+macs)\b",
+            r"\b(hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|namaste\s+max|a\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max)\b",
             r"\bmax\b",
+            r"(हे\s*मैक्स|मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स|हेलो\s*मैक्स|हाय\s*मैक्स)",
             r"\b(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho|kya\s+tum\s+zinda\s+ho|kya\s+tum\s+sun\s+rahe\s+ho)\b",
+            r"(क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो|मेरी\s*आवाज़\s*आ\s*रही\s*है)"
         ]
         for pat in wake_patterns:
-            if re.search(pat, norm):
+            if re.search(pat, clean, re.IGNORECASE):
                 return True
 
-        # Direct action and control commands (open, play, launch, monitor, background, etc.)
+        # Direct action and control commands (English + Hinglish + Devanagari Hindi)
         action_keywords = [
             "open", "launch", "play", "pause", "resume", "stop", "close", "kill",
             "volume", "mute", "unmute", "brightness", "switch", "workspace",
             "screenshot", "capture", "run", "start", "remember", "remind", "reminder",
             "monitor", "activity", "background", "status", "process", "task", "health",
             "kholo", "band", "chalao", "bajao", "roko", "badhao", "kam karo", "dikhao",
-            "yaad", "kaam", "dekh", "sun"
+            "yaad", "kaam", "dekh", "sun", "sunao", "lagao", "karo", "likho", "bhejo",
+            # Devanagari action keywords
+            "खोलो", "खोल", "चलाओ", "चला", "बजाओ", "बजा", "लगाओ", "लगा", "रोको", "रोक",
+            "बंद", "बढ़ाओ", "कम", "दिखाओ", "बताओ", "सुनाओ", "करो", "याद", "स्क्रीनशॉट",
+            "यूट्यूब", "गाना", "गीत", "वीडियो", "टर्मिनल", "ब्राउज़र", "वॉल्यूम", "आवाज़"
         ]
-        if any(re.search(rf"\b{re.escape(k)}\b", norm) for k in action_keywords):
-            return True
+        for k in action_keywords:
+            if re.search(rf"\b{re.escape(k)}\b", clean, re.IGNORECASE) or k in clean:
+                return True
 
-        # Complex reasoning/brainstorming/coding queries intended for AI
+        # Complex reasoning/brainstorming/coding queries intended for AI (English + Hindi)
         complex_keywords = [
             "brainstorm", "project", "idea", "plan", "build", "create", "code", "develop",
             "documentation", "docs", "write", "design", "system", "architecture", "script",
             "how", "why", "what", "who", "where", "when", "can you", "could you", "tell me",
             "explain", "help", "think", "suggest", "search for",
-            "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao"
+            "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao",
+            # Devanagari query keywords
+            "क्या", "क्यों", "कैसे", "कहाँ", "कब", "कौन", "किसे", "कितना", "बताओ", "बनाओ", "सोचो", "समझाओ", "सिखाओ", "मदद"
         ]
-        words = norm.split()
-        if any(k in norm for k in complex_keywords) and len(words) >= 2:
+        words = clean.split()
+        if any(k in clean.lower() for k in complex_keywords) and len(words) >= 2:
+            return True
+
+        # Any substantial Hindi utterance in Devanagari (>= 2 words)
+        has_devanagari = bool(re.search(r"[\u0900-\u097f]", clean))
+        if has_devanagari and len(words) >= 2:
             return True
 
         return False

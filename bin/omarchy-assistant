@@ -18,6 +18,7 @@ Omarchy Voice Assistant — Hands-free voice control for Omarchy Linux
 Usage:
   omarchy-assistant listen                 Trigger voice listening cycle (push-to-talk)
   omarchy-assistant continuous [start|stop] Hands-free continuous listening mode
+  omarchy-assistant chat [--cli|--log]    View live chat log or attach to interactive Antigravity CLI
   omarchy-assistant stop-listening        Cancel the active listening cycle
   omarchy-assistant exec "<command>"       Execute a voice command via text (dry-run/test)
   omarchy-assistant status                 Show daemon status and configuration
@@ -121,6 +122,45 @@ case "$cmd" in
         else
             PYTHONPATH="$REPO_DIR" python3 -m daemon.main --test-text "$text"
         fi
+        ;;
+
+    chat)
+        mode="${2:-live}"
+        cid_file="${HOME}/.config/omarchy-assistant/active_conversation_id.txt"
+        chat_log="${HOME}/Work/CHAT.md"
+        active_cid=""
+        if [[ -f "$cid_file" ]]; then
+            active_cid="$(cat "$cid_file")"
+        fi
+
+        case "$mode" in
+            --cli|cli|interactive)
+                echo "🤖 Attaching to active Antigravity CLI session (Conversation: ${active_cid:-latest})..."
+                if [[ -n "$active_cid" ]]; then
+                    exec agy --conversation "$active_cid"
+                else
+                    exec agy --continue
+                fi
+                ;;
+            --log|log)
+                if [[ -f "$chat_log" ]]; then
+                    exec less -R "$chat_log"
+                else
+                    echo "No chat log found at $chat_log yet."
+                fi
+                ;;
+            *)
+                echo -e "\033[1;36m================================================================\033[0m"
+                echo -e " 🤖 \033[1;37mMax Voice Assistant — Live Antigravity Chat\033[0m"
+                echo -e " \033[1;34mActive Conversation ID:\033[0m ${active_cid:-None}"
+                echo -e " \033[1;34mChat Log:\033[0m $chat_log"
+                echo -e " \033[0;33mTip: Run 'omarchy-assistant chat --cli' to enter interactive CLI\033[0m"
+                echo -e "\033[1;36m================================================================\033[0m"
+                echo ""
+                touch "$chat_log"
+                tail -n 35 -f "$chat_log"
+                ;;
+        esac
         ;;
 
     status)
