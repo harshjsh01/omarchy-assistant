@@ -31,18 +31,37 @@ class CommandRouter:
             }
         """
         clean_text = text.lower().strip()
-        # Direct wake call or greeting to Max
-        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max)\b$", clean_text):
+        if not clean_text or len(clean_text) < 2:
+            return {
+                "status": "unknown",
+                "intent": "empty",
+                "command": "",
+                "spoken_response": "",
+                "category": "none"
+            }
+
+        # 1. Internal Daemon Controls
+        if re.search(r"\b(start new chat|new conversation|naya chat|reset chat|clear chat)\b", clean_text):
+            new_id = self._create_new_antigravity_session()
+            return {
+                "status": "matched",
+                "intent": "new_chat",
+                "command": "",
+                "spoken_response": "Starting a fresh Antigravity session.",
+                "category": "ai"
+            }
+
+        # 2. Fast direct liveness / greeting checks (instant response without waiting)
+        if re.search(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max)$", clean_text):
             return {
                 "status": "matched",
                 "intent": "greeting",
                 "command": "",
-                "spoken_response": "Yes, I am live. How may I assist you today?",
+                "spoken_response": "Yes, I am live. What would you like to do?",
                 "category": "conversational"
             }
 
-        # Direct liveness and status checks (are you alive, are you there, zinda ho)
-        if re.search(r"\b(are you alive|are you there|can you hear me|are you listening|you alive|zinda ho|sun rahe ho|kya tum zinda ho|kya tum sun rahe ho)\b", clean_text):
+        if re.search(r"^(are you alive|are you there|can you hear me|zinda ho|sun rahe ho)$", clean_text):
             return {
                 "status": "matched",
                 "intent": "liveness_check",
@@ -51,48 +70,22 @@ class CommandRouter:
                 "category": "conversational"
             }
 
-        # Strip wake prefix (e.g. "Max open browser" -> "open browser")
-        clean_text = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max)\b\s*", "", clean_text).strip()
-        normalized_text = re.sub(r"[^\w\s%+-]", "", clean_text)
+        # 3. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING!
+        # Strip wake prefix if present ("Hey Max open youtube" -> "open youtube")
+        prompt_text = re.sub(r"^(hey\s+max|ok\s+max|hello\s+max|hi\s+max|max|arrey\s+max|suno\s+max)\b\s*", "", text, flags=re.IGNORECASE).strip()
+        if not prompt_text:
+            prompt_text = text
 
-        # Check if the prompt contains complex, creative, or conversational intent
-        # that should be handled autonomously by Antigravity Gemini instead of static presets
-        complex_keywords = [
-            "brainstorm", "project", "idea", "plan", "build", "create", "code", "develop",
-            "documentation", "docs", "write", "design", "system", "architecture", "script",
-            "how", "why", "what", "who", "where", "when", "can you", "could you", "tell me",
-            "explain", "help", "think", "suggest", "look up", "search for",
-            "kya", "kyun", "kaise", "batao", "banao", "socho", "sikhao", "samjhao"
-        ]
-        words = clean_text.split()
-        has_conjunction = any(w in words for w in ["and", "then", "because", "also", "aur", "phir"])
-        has_complex_keyword = any(k in clean_text for k in complex_keywords)
-        is_slash_command = clean_text.startswith("/")
-
-        # If it's a slash command, compound command, or complex request:
-        # send directly to Antigravity Gemini for intelligent reasoning and tool execution
-        if is_slash_command or has_complex_keyword or (has_conjunction and len(words) > 3):
-            if self.config.get("llm_fallback_enabled", True):
-                llm_result = self._fallback_llm(clean_text or text)
-                if llm_result:
-                    return llm_result
-
-        # 1. Direct Regex / Rule Matching (for instantaneous desktop toggles: volume, media, brightness)
-        rule_match = self._match_rules(normalized_text)
-        if rule_match:
-            return rule_match
-
-        # 2. Conversational & LLM Fallback
-        if self.config.get("llm_fallback_enabled", True):
-            llm_result = self._fallback_llm(clean_text or text)
-            if llm_result:
-                return llm_result
+        # Send directly to the active Antigravity CLI chat session
+        llm_result = self._fallback_llm(prompt_text)
+        if llm_result:
+            return llm_result
 
         return {
             "status": "unknown",
             "intent": "unknown",
             "command": "",
-            "spoken_response": f"I heard '{text}', but I don't know how to do that.",
+            "spoken_response": f"I heard '{text}'.",
             "category": "none"
         }
 
