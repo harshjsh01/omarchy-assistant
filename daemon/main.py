@@ -126,6 +126,7 @@ class AssistantDaemon:
             if not self.continuous_mode:
                 return {"status": "not_active", "message": "Continuous listening is not active."}
             self.continuous_mode = False
+            self.recorder.stop_continuous_stream()
             self.recorder.stop_recording()
             self.set_state("idle")
             return {"status": "stopped", "message": "Continuous listening stopped."}
@@ -133,6 +134,7 @@ class AssistantDaemon:
         elif action == "continuous_toggle":
             if self.continuous_mode:
                 self.continuous_mode = False
+                self.recorder.stop_continuous_stream()
                 self.recorder.stop_recording()
                 self.set_state("idle")
                 return {"status": "stopped", "message": "Continuous listening stopped."}
@@ -176,21 +178,25 @@ class AssistantDaemon:
         with self.lock:
             self.is_busy = True
             try:
-                # 1. Update state: listening
+                # 1. Spoken greeting: speak aloud before opening mic
                 greeting = "I'm live, how may I assist you today?"
-                self.set_state("listening", transcript=greeting)
+                self.set_state("speaking", transcript=greeting, action_desc=greeting)
                 self.executor.send_desktop_notification(
                     {"intent": "assistant_ready", "spoken_response": greeting},
                     success=True
                 )
+                if self.tts.enabled:
+                    self.tts.speak(greeting, wait=True)
+
                 if self.config.get("sound_feedback", True):
                     self.recorder.play_feedback_tone("start")
 
                 # 2. Record audio with VAD
+                self.set_state("listening")
                 wav_path = self.recorder.record_with_vad(
                     max_duration=self.config.get("max_record_seconds", 12.0),
                     silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 580.0)
+                    energy_threshold=self.config.get("silence_threshold_energy", 850.0)
                 )
 
                 if self.config.get("sound_feedback", True):
@@ -229,26 +235,26 @@ class AssistantDaemon:
 
                 result = self.executor.execute(action)
 
-                # 6. Optional TTS feedback
+                # 6. TTS feedback
                 if action.get("spoken_response"):
                     self.set_state(
                         "speaking",
                         transcript=transcript,
                         action_desc=action.get("spoken_response", "")
                     )
-                    self.tts.speak(action["spoken_response"])
+                    if self.tts.enabled:
+                        self.tts.speak(action["spoken_response"], wait=True)
 
                 # If requested to start continuous mode, transition now
                 if action.get("intent") == "start_continuous":
-                    time.sleep(1.0)
+                    time.sleep(0.5)
                     self.continuous_mode = True
-                    self.set_state("listening")
                     self._continuous_thread = threading.Thread(target=self._run_continuous_loop, daemon=True)
                     self._continuous_thread.start()
                     return
 
                 # Done
-                time.sleep(1.0)
+                time.sleep(0.5)
                 self.set_state("idle")
 
             except Exception as e:
@@ -314,11 +320,15 @@ class AssistantDaemon:
         print("[omarchy-assistant] Continuous listening loop started.")
         self.continuous_mode = True
         greeting = "Continuous listening mode activated. I am listening, Max is at your service."
+        self.set_state("speaking", transcript=greeting, action_desc=greeting)
         self.executor.send_desktop_notification(
             {"intent": "continuous_active", "spoken_response": greeting},
             success=True
         )
-        self.tts.speak(greeting, wait=True)
+        if self.tts.enabled:
+            self.tts.speak(greeting, wait=True)
+
+        self.recorder.start_continuous_stream()
         self.set_state("continuous_standby")
 
         while self.continuous_mode:
@@ -332,13 +342,13 @@ class AssistantDaemon:
                     if self.continuous_mode:
                         self.set_state("listening")
 
-                # 2. Record audio with dynamic VAD (stops automatically when user pauses speaking)
-                wav_path = self.recorder.record_with_vad(
-                    max_duration=self.config.get("max_record_seconds", 12.0),
-                    silence_timeout=self.config.get("silence_duration_seconds", 1.2),
-                    energy_threshold=self.config.get("silence_threshold_energy", 580.0),
+                # 2. Record next utterance from persistent stream
+                wav_path = self.recorder.listen_turn(
+                    silence_timeout=self.config.get("silence_duration_seconds", 1.1),
+                    energy_threshold=self.config.get("silence_threshold_energy", 850.0),
                     on_speech_start=on_speech_start_callback,
-                    idle_timeout=3.0
+                    is_active=lambda: self.continuous_mode,
+                    max_duration=self.config.get("max_record_seconds", 12.0)
                 )
 
                 if not self.continuous_mode:
@@ -349,18 +359,12 @@ class AssistantDaemon:
                             pass
                     break
 
-                # If no speech was detected in this slice, loop again cleanly in standby
-                if not getattr(self.recorder, "last_recording_had_speech", False) or not wav_path or not os.path.exists(wav_path):
-                    if wav_path and os.path.exists(wav_path):
-                        try:
-                            os.unlink(wav_path)
-                        except OSError:
-                            pass
+                if not wav_path or not os.path.exists(wav_path):
                     self.set_state("continuous_standby")
                     time.sleep(0.05)
                     continue
 
-                # User spoke and paused: transition to processing (animated yellow dots)
+                # User spoke: transition to processing (animated yellow dots)
                 self.is_busy = True
                 self.set_state("processing")
                 if self.config.get("sound_feedback", True):
@@ -385,9 +389,11 @@ class AssistantDaemon:
                 clean_lower = transcript.lower().strip()
                 if any(p in clean_lower for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
                     self.continuous_mode = False
+                    self.recorder.stop_continuous_stream()
                     bye = "Continuous listening stopped. Say Hey Max when you need me."
                     self.set_state("speaking", transcript=transcript, action_desc=bye)
-                    self.tts.speak(bye, wait=True)
+                    if self.tts.enabled:
+                        self.tts.speak(bye, wait=True)
                     self.set_state("idle")
                     break
 
@@ -398,17 +404,18 @@ class AssistantDaemon:
                     time.sleep(0.05)
                     continue
 
-                # Refresh dialogue active timer (20 seconds for natural follow-ups without repeating Hey Max)
-                self._dialogue_active_until = time.time() + 20.0
+                # Refresh dialogue active timer (25 seconds for natural follow-ups without repeating Hey Max)
+                self._dialogue_active_until = time.time() + 25.0
 
-                # 4. Route intent (passes straight into Antigravity session without alteration)
+                # 4. Route intent
                 action = self.router.route(transcript)
                 self.last_action = action
 
                 if action.get("intent") == "stop_continuous":
                     self.continuous_mode = False
+                    self.recorder.stop_continuous_stream()
                     self.set_state("speaking", transcript=transcript, action_desc=action.get("spoken_response", ""))
-                    if action.get("spoken_response"):
+                    if action.get("spoken_response") and self.tts.enabled:
                         self.tts.speak(action["spoken_response"], wait=True)
                     self.set_state("idle")
                     break
@@ -429,10 +436,13 @@ class AssistantDaemon:
                         transcript=transcript,
                         action_desc=action.get("spoken_response", "")
                     )
-                    self.tts.speak(action["spoken_response"], wait=True)
+                    if self.tts.enabled:
+                        self.tts.speak(action["spoken_response"], wait=True)
 
-                # Delay slightly so room acoustic echo clears before opening mic again
-                time.sleep(0.6)
+                # Delay slightly so room acoustic echo clears, and drain any speaker audio from the pipe
+                time.sleep(0.4)
+                self.recorder.drain_stream()
+
                 if self.continuous_mode and self.config.get("sound_feedback", True):
                     self.recorder.play_feedback_tone("start")
                 self.set_state("continuous_standby")
@@ -443,6 +453,7 @@ class AssistantDaemon:
                 time.sleep(0.5)
 
         self.continuous_mode = False
+        self.recorder.stop_continuous_stream()
         self.set_state("idle")
 
     def _run_text_pipeline(self, text: str):

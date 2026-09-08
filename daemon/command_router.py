@@ -70,14 +70,21 @@ class CommandRouter:
                 "category": "conversational"
             }
 
-        # 3. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING!
+        # 3. Instant local hardware & media rules (10ms execution for volume, brightness, media, workspaces)
+        hardware_match = self._match_rules(clean_text)
+        if hardware_match and hardware_match.get("category") in ["audio", "media", "display", "hyprland"]:
+            return hardware_match
+
+        # 4. DIRECT ANTIGRAVITY AUTONOMOUS ENGINE FOR EVERYTHING ELSE!
         # Send spoken transcript directly to the active Antigravity CLI session without alteration
         prompt_text = text.strip()
-
-        # Send directly to the active Antigravity CLI chat session
         llm_result = self._fallback_llm(prompt_text)
         if llm_result:
             return llm_result
+
+        # 5. Fallback to matched rules if Antigravity is offline
+        if hardware_match:
+            return hardware_match
 
         return {
             "status": "unknown",
@@ -783,7 +790,7 @@ class CommandRouter:
 
                 # Dynamic reasoning effort based on task complexity (brainstorming, coding, planning)
                 is_complex = bool(re.search(r"\b(brainstorm|project|idea|plan|documentation|docs|build|create\s+folder|architecture|code|develop|create|system|design)\b", clean))
-                effort = "high" if is_complex else self.config.get("reasoning_effort", "medium")
+                effort = "high" if is_complex else self.config.get("reasoning_effort", "low")
 
                 # Auto-approve tool permissions so Max can autonomously create folders, docs, and run commands
                 cmd = [
@@ -797,7 +804,7 @@ class CommandRouter:
                     cmd.insert(1, "--conversation")
                     cmd.insert(2, active_conv)
 
-                timeout_sec = 65 if is_complex else 35
+                timeout_sec = 120 if is_complex else 60
                 res = subprocess.run(
                     cmd,
                     cwd=chat_dir,
@@ -805,6 +812,22 @@ class CommandRouter:
                     text=True,
                     timeout=timeout_sec
                 )
+                if res.returncode != 0 and active_conv:
+                    # In case active conversation is corrupted or invalid, auto-retry with fresh session
+                    cmd_fresh = [
+                        agy_bin,
+                        "--effort", effort,
+                        "--dangerously-skip-permissions",
+                        "--output-format", "json",
+                        "--print", prompt
+                    ]
+                    res = subprocess.run(
+                        cmd_fresh,
+                        cwd=chat_dir,
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout_sec
+                    )
                 if res.returncode == 0 and res.stdout.strip():
                     ans = ""
                     try:

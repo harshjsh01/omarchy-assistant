@@ -250,6 +250,7 @@ class WhisperCppEngine(BaseSTTEngine):
                 "-f", wav_path,
                 "-nt",
                 "-sns",
+                "-nf",
                 "-mc", "0",
                 "-nth", "0.65",
                 "--no-prints",
@@ -277,6 +278,13 @@ class WhisperCppEngine(BaseSTTEngine):
             }
             norm = text.lower().strip(" ,.!?-")
             if not norm or norm in hallucinations or text.lower() in hallucinations:
+                return ""
+
+            # Reject repeated numbers/hyphens or repeated character strings (e.g. 4-5-6-6-6-6-6-6)
+            if re.search(r"(\S[- ]?)\1{4,}", norm):
+                return ""
+            # Reject repeated words (e.g. "you you you you")
+            if re.search(r"\b(\w+)\b(?:\s+\1\b){2,}", norm):
                 return ""
 
             return text

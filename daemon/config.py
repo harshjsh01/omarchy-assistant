@@ -27,13 +27,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "groq_api_key": "",
     "openai_api_key": "",
     "gemini_api_key": "",
-    "reasoning_effort": "medium",  # "low", "medium", "high"
+    "reasoning_effort": "low",  # "low", "medium", "high"
 
     # Audio recording settings
     "sample_rate": 16000,
     "max_record_seconds": 12,
-    "silence_threshold_energy": 300,
-    "silence_duration_seconds": 1.2,
+    "silence_threshold_energy": 850,
+    "silence_duration_seconds": 1.1,
     "min_record_seconds": 0.8,
 
     # Text-to-Speech & Feedback
