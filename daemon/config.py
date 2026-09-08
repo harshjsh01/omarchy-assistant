@@ -17,7 +17,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Options: "whisper-cpp", "auto", "faster-whisper", "groq", "sarvam", "openai", "speech_recognition", "vosk", "mock"
     "stt_backend": "whisper-cpp",
     "language": "auto",
-    "whisper_model": "base",
+    "whisper_model": "small",
     "whisper_device": "cpu",       # "cpu" or "cuda"
     "whisper_compute_type": "int8", # "int8", "float16", "default"
     "assistant_name": "Max",
@@ -32,7 +32,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # Audio recording settings
     "sample_rate": 16000,
     "max_record_seconds": 12,
-    "silence_threshold_energy": 1050,
+    "silence_threshold_energy": 550,
     "silence_duration_seconds": 1.1,
     "min_record_seconds": 0.8,
 

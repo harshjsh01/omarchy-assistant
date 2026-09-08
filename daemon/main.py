@@ -234,15 +234,16 @@ class AssistantDaemon:
 
                 result = self.executor.execute(action)
 
-                # 6. TTS feedback
-                if action.get("spoken_response"):
+                # 6. TTS feedback (uses verified / fallback spoken response if modified)
+                spoken_response = result.get("spoken_response") or action.get("spoken_response", "")
+                if spoken_response:
                     self.set_state(
                         "speaking",
                         transcript=transcript,
-                        action_desc=action.get("spoken_response", "")
+                        action_desc=spoken_response
                     )
                     if self.tts.enabled:
-                        self.tts.speak(action["spoken_response"], wait=True)
+                        self.tts.speak(spoken_response, wait=True)
 
                 # If requested to start continuous mode, transition now
                 if action.get("intent") == "start_continuous":
@@ -434,14 +435,15 @@ class AssistantDaemon:
                 result = self.executor.execute(action)
 
                 # 6. Speak response synchronously so microphone does not pick up Max's own voice
-                if action.get("spoken_response"):
+                spoken_response = result.get("spoken_response") or action.get("spoken_response", "")
+                if spoken_response:
                     self.set_state(
                         "speaking",
                         transcript=transcript,
-                        action_desc=action.get("spoken_response", "")
+                        action_desc=spoken_response
                     )
                     if self.tts.enabled:
-                        self.tts.speak(action["spoken_response"], wait=True)
+                        self.tts.speak(spoken_response, wait=True)
 
                 # Delay slightly so room acoustic echo clears, and drain any speaker audio from the pipe
                 time.sleep(0.4)

@@ -156,13 +156,13 @@ class AudioRecorder:
                 pre_roll.append(data)
                 # Adapt noise floor slowly to room ambient acoustics
                 self.stream_noise_floor = 0.98 * self.stream_noise_floor + 0.02 * rms
-                effective_thresh = max(self.stream_noise_floor * 2.2, 1050.0, energy_threshold)
+                effective_thresh = max(self.stream_noise_floor * 1.5, 540.0, energy_threshold)
 
                 if rms > effective_thresh:
                     consecutive_speech += 1
-                    # Require 200ms (4 consecutive chunks) of sustained vocal energy
+                    # Require 150ms (3 consecutive chunks) of sustained vocal energy
                     # This completely ignores single clicks, keystrokes, drum beats, and breath pops
-                    if consecutive_speech >= 4:
+                    if consecutive_speech >= 3:
                         has_spoken = True
                         speech_chunks = list(pre_roll)
                         active_speech_chunks = consecutive_speech
@@ -175,7 +175,7 @@ class AudioRecorder:
                     consecutive_speech = 0
             else:
                 speech_chunks.append(data)
-                effective_thresh = max(self.stream_noise_floor * 1.8, 900.0, energy_threshold * 0.85)
+                effective_thresh = max(self.stream_noise_floor * 1.25, 450.0, energy_threshold * 0.8)
 
                 if rms > effective_thresh:
                     active_speech_chunks += 1
@@ -189,10 +189,10 @@ class AudioRecorder:
                 if len(speech_chunks) >= max_chunks:
                     break
 
-        # A real spoken command must contain at least 6 active speech chunks (>= 300ms of active vocal energy)
-        # and at least 12 total chunks (>= 600ms total duration).
+        # A real spoken command must contain at least 4 active speech chunks (>= 200ms of active vocal energy)
+        # and at least 8 total chunks (>= 400ms total duration).
         # Anything less is background noise, breath, or a transient click, and is safely discarded without entering processing.
-        if has_spoken and active_speech_chunks >= 6 and len(speech_chunks) >= 12:
+        if has_spoken and active_speech_chunks >= 4 and len(speech_chunks) >= 8:
             return self._write_wav(speech_chunks)
 
         return None
@@ -268,7 +268,7 @@ class AudioRecorder:
                 if not has_spoken:
                     pre_roll.append(data)
                     noise_floor = 0.98 * noise_floor + 0.02 * rms
-                    effective_thresh = max(noise_floor * 2.2, 1000.0, energy_threshold)
+                    effective_thresh = max(noise_floor * 1.5, 540.0, energy_threshold)
 
                     if rms > effective_thresh:
                         consecutive_speech += 1
@@ -288,7 +288,7 @@ class AudioRecorder:
                             break
                 else:
                     speech_chunks.append(data)
-                    effective_thresh = max(noise_floor * 1.8, 850.0, energy_threshold * 0.85)
+                    effective_thresh = max(noise_floor * 1.25, 450.0, energy_threshold * 0.8)
 
                     if rms > effective_thresh:
                         active_speech_chunks += 1

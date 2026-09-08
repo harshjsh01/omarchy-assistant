@@ -223,8 +223,10 @@ class WhisperCppEngine(BaseSTTEngine):
         home = Path.home()
         self.binary_path = binary_path or os.getenv("WHISPER_BIN") or str(home / ".local" / "bin" / "whisper-cli")
 
-        # Prefer high-accuracy base model for English + Hindi / Hinglish support
-        default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-base.bin"
+        # Prefer high-accuracy small model, then base model for English + Hindi / Hinglish support
+        default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-small.bin"
+        if not default_model.exists():
+            default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-base.bin"
         if not default_model.exists():
             default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.bin"
         if not default_model.exists():
@@ -256,7 +258,7 @@ class WhisperCppEngine(BaseSTTEngine):
                 "--no-prints",
                 "-l", self.language,
                 "-t", "4",
-                "--prompt", "Hey Max, OK Max, Hello Max, Max, Antigravity, Omarchy, Hyprland, agy, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation, Seedhe Maut, YouTube, gaana, bajao, chalao, song, music, play, remember, remind, reminder, memory, yaad, monitor, activity"
+                "--prompt", "Hey Max, OK Max, Hello Max, Hi Max, Max, play song on YouTube, YouTube, Spotify, Seedhe Maut, song, songs, music, video, play, pause, resume, browser, Chromium, Antigravity, Omarchy, Hyprland, launch, terminal, workspace, Hinglish, Hindi, brainstorm, project, documentation, remember, remind, reminder, memory, yaad, monitor, activity"
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             lines = []

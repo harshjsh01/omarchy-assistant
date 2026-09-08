@@ -155,8 +155,93 @@ class CommandRouter:
                 "category": "audio"
             }
 
-        # --- Media Playback (English + Hindi/Hinglish) ---
-        if re.search(r"\b(pause music|pause video|pause playback|pause|gaana roko|gana roko|roko)\b", text):
+        # --- Specific Media Destination (YouTube, Spotify, Web) ---
+        # 1. YouTube playback and search
+        m_yt = re.search(r"\b(?:play|search for|search|listen to)\s+(?:a\s+|the\s+)?(?:song|track|music|video)?\s*(?:called|named)?\s*(.*?)\s*(?:on|in|from)\s*(?:youtube|yt)\b", text, re.IGNORECASE)
+        if not m_yt:
+            m_yt = re.search(r"\b(?:on|in)\s+(?:youtube|yt)\s+(?:play|search for|search|listen to)\s+(.*)\b", text, re.IGNORECASE)
+        if not m_yt:
+            m_yt = re.search(r"\byoutube\s+(?:par|pe)\s+(.*?)\s*(?:chalao|bajao|kholo|play karo)\b", text, re.IGNORECASE)
+        if not m_yt:
+            m_yt = re.search(r"\b(?:open\s+youtube\s+and\s+play|play\s+on\s+youtube)\s*(.*)\b", text, re.IGNORECASE)
+
+        if m_yt:
+            query = m_yt.group(1).strip()
+            # Clean up filler words like "song", "track", "music", "please", "some"
+            query = re.sub(r"^(?:a\s+|some\s+|any\s+|the\s+)?(?:song|music|track|video)(?:\s+called|\s+named)?\s*", "", query, flags=re.IGNORECASE).strip()
+            query = re.sub(r"^(?:please|kindly|jarur)\s*", "", query, flags=re.IGNORECASE).strip()
+            import urllib.parse
+            if query:
+                encoded = urllib.parse.quote_plus(query)
+                return {
+                    "status": "matched",
+                    "intent": "play_youtube",
+                    "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
+                    "spoken_response": f"Playing {query} on YouTube",
+                    "category": "apps"
+                }
+            else:
+                return {
+                    "status": "matched",
+                    "intent": "open_youtube",
+                    "command": "omarchy launch browser 'https://youtube.com'",
+                    "spoken_response": "Opening YouTube",
+                    "category": "apps"
+                }
+
+        if re.search(r"\b(open youtube|youtube kholo|play youtube|launch youtube)\b", text):
+            return {
+                "status": "matched",
+                "intent": "open_youtube",
+                "command": "omarchy launch browser 'https://youtube.com'",
+                "spoken_response": "Opening YouTube",
+                "category": "apps"
+            }
+
+        # 2. Spotify playback
+        m_sp = re.search(r"\b(?:play|listen to)\s+(?:a\s+|the\s+)?(?:song|track|music)?\s*(?:called|named)?\s*(.*?)\s*(?:on|in)\s*spotify\b", text, re.IGNORECASE)
+        if not m_sp:
+            m_sp = re.search(r"\bspotify\s+(?:par|pe)\s+(.*?)\s*(?:chalao|bajao|kholo|play karo)\b", text, re.IGNORECASE)
+        if m_sp:
+            query = m_sp.group(1).strip()
+            query = re.sub(r"^(?:a\s+|some\s+|the\s+)?(?:song|music|track)(?:\s+called|\s+named)?\s*", "", query, flags=re.IGNORECASE).strip()
+            import urllib.parse
+            if query:
+                encoded = urllib.parse.quote_plus(query)
+                return {
+                    "status": "matched",
+                    "intent": "play_spotify",
+                    "command": f"omarchy launch browser 'https://open.spotify.com/search/{encoded}'",
+                    "spoken_response": f"Searching for {query} on Spotify",
+                    "category": "apps"
+                }
+            else:
+                return {
+                    "status": "matched",
+                    "intent": "open_spotify",
+                    "command": "omarchy launch spotify || omarchy launch browser 'https://open.spotify.com'",
+                    "spoken_response": "Opening Spotify",
+                    "category": "apps"
+                }
+
+        # 3. Direct song playback request (e.g. "play seedhe maut", "play bohemian rhapsody")
+        m_song = re.search(r"^(?:play|listen to)\s+(?:song\s+|music\s+|track\s+)?([a-zA-Z0-9\s]+)$", text, re.IGNORECASE)
+        if m_song:
+            target = m_song.group(1).strip()
+            # Ignore generic words that just mean play/resume
+            if target.lower() not in ["music", "track", "song", "audio", "video", "something"]:
+                import urllib.parse
+                encoded = urllib.parse.quote_plus(target)
+                return {
+                    "status": "matched",
+                    "intent": "play_youtube",
+                    "command": f"omarchy launch browser 'https://www.youtube.com/results?search_query={encoded}'",
+                    "spoken_response": f"Playing {target} on YouTube",
+                    "category": "apps"
+                }
+
+        # --- Media Playback Controls (ONLY for toggling currently playing audio) ---
+        if re.search(r"^(pause|pause music|pause video|pause playback|stop playback|gaana roko|gana roko|roko)$", text):
             return {
                 "status": "matched",
                 "intent": "media_pause",
@@ -164,7 +249,7 @@ class CommandRouter:
                 "spoken_response": "Paused",
                 "category": "media"
             }
-        if re.search(r"\b(play music|resume music|play track|play|gaana bajao|gana bajao|gaana chalao|gana chalao)\b", text):
+        if re.search(r"^(play|resume|play music|resume music|play track|resume track|continue playback|gaana bajao|gana bajao|gaana chalao|gana chalao)$", text):
             return {
                 "status": "matched",
                 "intent": "media_play",
