@@ -56,9 +56,9 @@ class CommandRouter:
                 "category": "ai"
             }
 
-        # 2. Fast direct liveness / greeting checks (instant response when user simply calls "Max")
-        if re.search(r"^(max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|suno\s+max|marks|macs|kmax|he\s+makes|हे\s*मैक्स|सुनो\s*मैक्स)$", norm_text):
-            spoken = "हाँ, कहिए?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes, I am listening."
+        # 2. Fast direct liveness / greeting checks (instant response when user simply calls "Bro" or "Max")
+        if re.search(r"^(bro|ब्रो|भाई|hey\s+bro|ok\s+bro|hello\s+bro|hi\s+bro|yo\s+bro|suno\s+bro|हे\s*ब्रो|सुनो\s*ब्रो|नमस्ते\s*ब्रो|सुनो\s*भाई|max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|suno\s+max|marks|macs|kmax|he\s+makes|हे\s*मैक्स|सुनो\s*मैक्स)$", norm_text):
+            spoken = "हाँ भाई, बोलो?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes bro, I'm listening."
             return {
                 "status": "matched",
                 "intent": "greeting",
@@ -68,7 +68,7 @@ class CommandRouter:
             }
 
         if re.search(r"^(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho|क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो)$", norm_text):
-            spoken = "हाँ, मैं बिल्कुल लाइव और तैयार हूँ। आज मैं आपकी क्या मदद करूँ?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes, I am alive and listening! How may I assist you?"
+            spoken = "हाँ भाई, मैं बिल्कुल लाइव और तैयार हूँ। बोलो क्या काम है?" if re.search(r"[\u0900-\u097f]", norm_text) else "Yes bro, I am live and listening! What's up?"
             return {
                 "status": "matched",
                 "intent": "liveness_check",
@@ -79,7 +79,7 @@ class CommandRouter:
 
         # Strip leading wake words (English, Hinglish, Devanagari)
         stripped_prompt = re.sub(
-            r"^(max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max|हे\s*मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स)[,\s]+",
+            r"^(bro|ब्रो|भाई|hey\s+bro|ok\s+bro|hello\s+bro|hi\s+bro|yo\s+bro|suno\s+bro|हे\s*ब्रो|सुनो\s*ब्रो|नमस्ते\s*ब्रो|सुनो\s*भाई|max|मैक्स|hey\s+max|ok\s+max|hello\s+max|hi\s+max|arrey\s+max|suno\s+max|hey\s+marks|hey\s+macs|kmax|k\s+max|he\s+makes|hay\s+max|हे\s*मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स|अरे\s*मैक्स|ओके\s*मैक्स)[,\s]+",
             "",
             clean_text,
             flags=re.IGNORECASE
@@ -869,7 +869,7 @@ class CommandRouter:
                 "status": "matched",
                 "intent": "stop_continuous",
                 "command": "omarchy-assistant continuous stop",
-                "spoken_response": "Going to sleep. Say Max whenever you need me.",
+                "spoken_response": "Going to sleep. Say Bro whenever you need me.",
                 "category": "assistant"
             }
         # --- Chat Session Management ---
@@ -918,7 +918,7 @@ class CommandRouter:
             if not agy_bin or not os.path.exists(agy_bin):
                 return ""
             res = subprocess.run(
-                [agy_bin, "--effort", "low", "--output-format", "json", "--print", "You are Max. I will call you Max."],
+                [agy_bin, "--effort", "low", "--output-format", "json", "--print", "You are Bro. I will call you Bro."],
                 cwd=chat_dir,
                 capture_output=True,
                 text=True,
@@ -1173,13 +1173,13 @@ class CommandRouter:
                 "category": "system"
             }
 
-        # 7. Offline Fallback: Identity & Persona (Max)
+        # 7. Offline Fallback: Identity & Persona (Bro)
         if re.search(r"\b(who are you|tum kaun ho|what is your name|apna naam batao|tell me about yourself)\b", clean):
             return {
                 "status": "llm",
                 "intent": "persona_identity",
                 "command": "",
-                "spoken_response": "I am Max, your personal voice assistant for Omarchy Linux. I can control your desktop, workspaces, windows, launch apps, record meetings, and answer your questions.",
+                "spoken_response": "I am Bro, your personal voice assistant for Omarchy Linux. I can control your desktop, workspaces, windows, launch apps, record meetings, and answer your questions.",
                 "category": "ai"
             }
         if re.search(r"\b(what can you do|tum kya kar sakte ho|help me|features)\b", clean):
@@ -1195,7 +1195,7 @@ class CommandRouter:
                 "status": "llm",
                 "intent": "smalltalk_status",
                 "command": "",
-                "spoken_response": "I am running at peak performance and ready to assist you!",
+                "spoken_response": "Sab badiya bro! Running at peak performance and ready to assist you!",
                 "category": "ai"
             }
         if re.search(r"\b(tell me a joke|koi joke sunao|make me laugh)\b", clean):
@@ -1218,7 +1218,7 @@ class CommandRouter:
         groq_key = self.config.get("groq_api_key") or os.getenv("GROQ_API_KEY")
 
         system_instruction = (
-            "You are Max, an ultra-smart, helpful personal AI assistant for Omarchy Linux (Arch Linux with Hyprland). "
+            "You are Bro, an ultra-smart, helpful personal AI assistant for Omarchy Linux (Arch Linux with Hyprland). "
             "Respond concisely in 1 to 2 conversational sentences as speech feedback. "
             "If the user asks to run an OS command, include a safe bash 'command'. "
             "Return strictly valid JSON with keys: 'command' (string) and 'spoken_response' (string)."
@@ -1288,7 +1288,7 @@ class CommandRouter:
             "status": "matched",
             "intent": "conversational",
             "command": "",
-            "spoken_response": f"I heard '{prompt}'. I am Max, and I am here to help you.",
+            "spoken_response": f"I heard '{prompt}'. I am Bro, and I am here to help you.",
             "category": "conversational"
         }
 
@@ -1303,8 +1303,8 @@ class CommandRouter:
 
             if not chat_file.exists():
                 chat_file.write_text(
-                    "# 💬 Max Voice Assistant Live Chat Log\n"
-                    "*Real-time conversational log between you and Max (powered by Google Gemini via Antigravity).*\n"
+                    "# 💬 Bro Voice Assistant Live Chat Log\n"
+                    "*Real-time conversational log between you and Bro (powered by Google Gemini via Antigravity).*\n"
                     "- **CLI Command to View:** `omarchy-assistant chat`\n"
                     "- **Interactive CLI Session:** `omarchy-assistant chat --cli`\n\n"
                     "---\n\n",
@@ -1318,7 +1318,7 @@ class CommandRouter:
                     pass
 
             now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            entry = f"### 👤 You [{now_str}]\n> {user_prompt}\n\n### 🤖 Max (Antigravity Gemini)\n{assistant_response}\n\n"
+            entry = f"### 👤 You [{now_str}]\n> {user_prompt}\n\n### 🤖 Bro (Antigravity Gemini)\n{assistant_response}\n\n"
             if spoken:
                 entry += f"**Spoken Summary:** *{spoken}*\n\n"
             entry += "---\n\n"

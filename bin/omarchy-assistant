@@ -152,7 +152,7 @@ case "$cmd" in
                 ;;
             *)
                 echo -e "\033[1;36m================================================================\033[0m"
-                echo -e " 🤖 \033[1;37mMax Voice Assistant — Live Antigravity Chat\033[0m"
+                echo -e " 🤖 \033[1;37mBro Voice Assistant — Live Antigravity Chat\033[0m"
                 echo -e " \033[1;34mActive Conversation ID:\033[0m ${active_cid:-None}"
                 echo -e " \033[1;34mChat Log:\033[0m $chat_log"
                 echo -e " \033[0;33mTip: Run 'omarchy-assistant chat --cli' to enter interactive CLI\033[0m"

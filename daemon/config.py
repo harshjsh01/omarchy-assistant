@@ -20,7 +20,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "whisper_model": "small",
     "whisper_device": "cpu",       # "cpu" or "cuda"
     "whisper_compute_type": "int8", # "int8", "float16", "default"
-    "assistant_name": "Max",
+    "assistant_name": "Bro",
 
     # API Keys (can also be read from environment variables)
     "sarvam_api_key": "",
@@ -41,7 +41,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
     # Text-to-Speech & Feedback
     "tts_enabled": True,
-    "tts_backend": "auto",          # "auto", "google", "piper", "espeak-ng", "none"
+    "tts_backend": "auto",          # "auto", "sarvam", "google", "piper", "espeak-ng", "none"
+    "tts_speaker": "aditya",        # "aditya", "shubh", "ratan", "kabir" (Sarvam bulbul:v3)
+    "tts_model": "bulbul:v3",
+    "tts_pace": 1.0,
     "sound_feedback": True,         # Play start/stop chimes
     "notify_osd": True,             # Show desktop notifications
 

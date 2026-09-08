@@ -263,10 +263,10 @@ class AssistantDaemon:
             finally:
                 self.is_busy = False
 
-    def _is_addressed_to_max(self, transcript: str) -> bool:
+    def _is_addressed_to_assistant(self, transcript: str) -> bool:
         """
-        Check if speech during continuous mode is directed at Max.
-        Only wakes up when 'Max' (or Hindi 'मैक्स') is explicitly addressed.
+        Check if speech during continuous mode is directed at Bro (or Max legacy).
+        Only wakes up when 'Bro' (or Hindi 'ब्रो', 'भाई', or 'Max') is addressed.
         """
         import re
         clean = transcript.lower().strip()
@@ -286,27 +286,34 @@ class AssistantDaemon:
         if time.time() < getattr(self, "_dialogue_active_until", 0.0):
             return True
 
-        # Wakeup MUST address Max: 'Max' or 'मैक्स' (with slight Whisper phonetic tolerance)
-        max_wake_patterns = [
+        # Wakeup: Bro / भाई / Max (English, Hinglish, Devanagari)
+        wake_patterns = [
+            r"\b(bro|bhai)\b",
+            r"(ब्रो|भाई|हे\s*ब्रो|सुनो\s*ब्रो|नमस्ते\s*ब्रो|सुनो\s*भाई|हे\s*भाई)",
+            r"\b(hey\s+bro|ok\s+bro|hi\s+bro|hello\s+bro|yo\s+bro|suno\s+bro|arrey\s+bro|hey\s+bhai|suno\s+bhai)\b",
+            # Legacy fallback for Max
             r"\bmax\b",
             r"(मैक्स|हे\s*मैक्स|सुनो\s*मैक्स|नमस्ते\s*मैक्स)",
             r"\b(hey\s+max|ok\s+max|hi\s+max|hello\s+max|suno\s+max|arrey\s+max)\b",
-            # Whisper phonetic variations if it mishears the single syllable 'max'
+            # Whisper phonetic variations
             r"\b(marks|macs|kmax|he\s+makes|hay\s+max)\b",
             r"\b(are\s+you\s+alive|are\s+you\s+there|can\s+you\s+hear\s+me|you\s+alive|zinda\s+ho|sun\s+rahe\s+ho)\b",
             r"(क्या\s*तुम\s*सुन\s*रहे\s*हो|सुन\s*रहे\s*हो|क्या\s*तुम\s*ज़िंदा\s*हो|ज़िंदा\s*हो)"
         ]
-        for pat in max_wake_patterns:
+        for pat in wake_patterns:
             if re.search(pat, clean, re.IGNORECASE):
                 return True
 
         return False
 
+    def _is_addressed_to_max(self, transcript: str) -> bool:
+        return self._is_addressed_to_assistant(transcript)
+
     def _run_continuous_loop(self):
         """Continuously listen and execute commands hands-free until stopped."""
         print("[omarchy-assistant] Continuous listening loop started.")
         self.continuous_mode = True
-        greeting = "Continuous listening mode activated. I am listening, Max is at your service."
+        greeting = "Continuous listening mode activated. I am listening, Bro is at your service."
         self.set_state("speaking", transcript=greeting, action_desc=greeting)
         self.executor.send_desktop_notification(
             {"intent": "continuous_active", "spoken_response": greeting},
@@ -338,30 +345,19 @@ class AssistantDaemon:
                     max_duration=self.config.get("max_record_seconds", 12.0)
                 )
 
-                if not self.continuous_mode:
-                    if wav_path and os.path.exists(wav_path):
-                        try:
-                            os.unlink(wav_path)
-                        except OSError:
-                            pass
-                    break
-
-                if not wav_path or not os.path.exists(wav_path):
+                if not wav_path or not self.continuous_mode:
                     self.set_state("continuous_standby")
-                    time.sleep(0.05)
                     continue
 
-                # User spoke: transition to processing (animated yellow dots)
-                self.is_busy = True
+                # 3. Transcribe audio with selected STT engine
                 self.set_state("processing")
-
                 transcript = self.stt.transcribe(wav_path)
-                self.current_transcript = transcript
 
-                try:
-                    os.unlink(wav_path)
-                except OSError:
-                    pass
+                if os.path.exists(wav_path):
+                    try:
+                        os.unlink(wav_path)
+                    except OSError:
+                        pass
 
                 if not transcript or not transcript.strip():
                     self.set_state("continuous_standby")
@@ -375,15 +371,15 @@ class AssistantDaemon:
                 if any(p in clean_lower for p in ["stop listening", "stop continuous", "go to sleep", "chup ho jao", "sleep now", "chup raho", "exit continuous"]):
                     self.continuous_mode = False
                     self.recorder.stop_continuous_stream()
-                    bye = "Continuous listening stopped. Say Max when you need me."
+                    bye = "Continuous listening stopped. Say Bro when you need me."
                     self.set_state("speaking", transcript=transcript, action_desc=bye)
                     if self.tts.enabled:
                         self.tts.speak(bye, wait=True)
                     self.set_state("idle")
                     break
 
-                # In continuous mode: only route speech if addressed to Max
-                if not self._is_addressed_to_max(transcript):
+                # In continuous mode: only route speech if addressed to Bro
+                if not self._is_addressed_to_assistant(transcript):
                     print(f"[omarchy-assistant] [Continuous] Ignored non-command speech in standby: '{transcript}'")
                     self.set_state("continuous_standby")
                     time.sleep(0.05)

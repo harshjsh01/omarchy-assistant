@@ -115,10 +115,10 @@ Panel {
     useActiveColor: true
     activeColor: root.isProcessing ? "#facc15" : (root.continuousMode ? "#4ade80" : (Style.colors.accent || "#38bdf8"))
     tooltipText: {
-      if (root.isListening) return "Max: Listening (Speak now)..."
-      if (root.isProcessing) return "Max: Thinking & Speaking..."
-      if (root.currentState === "continuous_standby" || root.continuousMode) return "Max: Continuous Standby (Say 'Max')"
-      return "Max Assistant (Click for Dashboard | Right-Click: Continuous Mode)"
+      if (root.isListening) return "Bro: Listening (Speak now)..."
+      if (root.isProcessing) return "Bro: Thinking & Speaking..."
+      if (root.currentState === "continuous_standby" || root.continuousMode) return "Bro: Continuous Standby (Say 'Bro')"
+      return "Bro Assistant (Click for Dashboard | Right-Click: Continuous Mode)"
     }
 
     onPressed: function(mouseButton) {
@@ -196,7 +196,7 @@ Panel {
               spacing: Style.space(2)
 
               Text {
-                text: "Max Assistant"
+                text: "Bro Assistant"
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.title
@@ -216,7 +216,7 @@ Panel {
                   text: {
                     if (root.isListening) return "Listening to voice..."
                     if (root.isProcessing) return "Thinking (Gemini 3.8 Flash)..."
-                    if (root.currentState === "continuous_standby" || root.continuousMode) return "Continuous Standby (Say 'Max')"
+                    if (root.currentState === "continuous_standby" || root.continuousMode) return "Continuous Standby (Say 'Bro')"
                     return "Ready • Super+A"
                   }
                   color: root.dim
@@ -312,7 +312,7 @@ Panel {
               clip: true
 
               Text {
-                text: "Ask Max or give a command..."
+                text: "Ask Bro or give a command..."
                 color: root.dim
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.body
@@ -384,7 +384,7 @@ Panel {
               width: parent.width
               wrapMode: Text.WordWrap
               visible: root.currentAction !== ""
-              text: "Max: " + root.currentAction
+              text: "Bro: " + root.currentAction
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption

@@ -1,11 +1,9 @@
-"""
-Text-to-Speech (TTS) Engine for voice feedback.
-Supports Google TTS via PipeWire (natural English/Hindi), Piper TTS, espeak-ng, and spd-say.
-"""
-
+import base64
+import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import urllib.parse
@@ -28,6 +26,64 @@ class TTSEngine:
         else:
             threading.Thread(target=self._speak_worker, args=(text.strip(),), daemon=True).start()
 
+    def _speak_sarvam(self, clean: str) -> bool:
+        """Synthesize natural Indian voice via Sarvam AI bulbul:v3 API."""
+        api_key = self.config.get("sarvam_api_key") or os.getenv("SARVAM_API_KEY", "")
+        if not api_key:
+            return False
+
+        try:
+            # Determine language code: hi-IN if Hindi characters present, else en-IN
+            lang = "hi-IN" if any("\u0900" <= c <= "\u097F" for c in clean) else "en-IN"
+            speaker = self.config.get("tts_speaker", "aditya")
+            model = self.config.get("tts_model", "bulbul:v3")
+            pace = float(self.config.get("tts_pace", 1.0))
+
+            payload = {
+                "inputs": [clean[:500]],
+                "target_language_code": lang,
+                "speaker": speaker,
+                "model": model,
+                "pace": pace,
+                "speech_sample_rate": 22050,
+                "enable_preprocessing": True
+            }
+
+            req = urllib.request.Request(
+                "https://api.sarvam.ai/text-to-speech",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "api-subscription-key": api_key,
+                    "Content-Type": "application/json"
+                },
+                method="POST"
+            )
+
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                audios = data.get("audios", [])
+                if not audios:
+                    return False
+                audio_bytes = base64.b64decode(audios[0])
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_wav:
+                f_wav.write(audio_bytes)
+                wav_path = f_wav.name
+
+            try:
+                player = "pw-play" if shutil.which("pw-play") else "aplay"
+                subprocess.run([player, wav_path], timeout=15, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True
+            finally:
+                if os.path.exists(wav_path):
+                    try:
+                        os.unlink(wav_path)
+                    except OSError:
+                        pass
+        except Exception as e:
+            print(f"[omarchy-assistant] Sarvam TTS warning: {e}", file=sys.stderr)
+            return False
+
     def _speak_worker(self, text: str) -> None:
         """Fetch and play audio over speakers."""
         # Clean text for speech synthesis
@@ -35,7 +91,12 @@ class TTSEngine:
         if not clean:
             return
 
-        # 1. Primary: Google TTS via PipeWire / ALSA
+        # 1. High Quality: Sarvam AI Indian Voices (bulbul:v3 - Aditya, Shubh, Ratan, Kabir)
+        if self.backend in ["sarvam", "auto"]:
+            if self._speak_sarvam(clean):
+                return
+
+        # 2. Online fallback: Google TTS via PipeWire / ALSA
         if self.backend in ["google", "auto"]:
             try:
                 # Detect Hindi characters or phrases
