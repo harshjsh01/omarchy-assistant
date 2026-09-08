@@ -219,20 +219,25 @@ class SarvamSTTEngine(BaseSTTEngine):
 class WhisperCppEngine(BaseSTTEngine):
     """Local offline multilingual Whisper engine via compiled whisper-cli with prompt biasing."""
 
-    def __init__(self, binary_path: Optional[str] = None, model_path: Optional[str] = None, language: str = "auto"):
+    def __init__(self, binary_path: Optional[str] = None, model_path: Optional[str] = None, language: str = "auto", model_name: Optional[str] = None):
         home = Path.home()
         self.binary_path = binary_path or os.getenv("WHISPER_BIN") or str(home / ".local" / "bin" / "whisper-cli")
 
-        # Prefer high-accuracy small model, then base model for English + Hindi / Hinglish support
-        default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-small.bin"
-        if not default_model.exists():
-            default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-base.bin"
-        if not default_model.exists():
-            default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.bin"
-        if not default_model.exists():
-            default_model = home / ".local" / "share" / "omarchy-assistant" / "models" / "ggml-tiny.en.bin"
+        models_dir = home / ".local" / "share" / "omarchy-assistant" / "models"
+        selected = None
+        if model_name:
+            cand = models_dir / f"ggml-{model_name}.bin"
+            if cand.exists():
+                selected = cand
 
-        self.model_path = model_path or os.getenv("WHISPER_MODEL_PATH") or str(default_model)
+        if not selected:
+            for m in ["ggml-base.bin", "ggml-small.bin", "ggml-tiny.bin", "ggml-tiny.en.bin"]:
+                cand = models_dir / m
+                if cand.exists():
+                    selected = cand
+                    break
+
+        self.model_path = model_path or os.getenv("WHISPER_MODEL_PATH") or (str(selected) if selected else "")
         self.language = language
 
     def is_available(self) -> bool:
@@ -328,7 +333,7 @@ def get_stt_engine(config: dict) -> BaseSTTEngine:
 
     # 4. Local offline whisper.cpp (fast, free, multilingual base model with prompt biasing)
     if backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp", "auto"]:
-        engine = WhisperCppEngine(language=config.get("language", "auto"))
+        engine = WhisperCppEngine(language=config.get("language", "auto"), model_name=config.get("whisper_model", "base"))
         if engine.is_available() or backend in ["whisper-cpp", "whisper.cpp", "whisper_cpp"]:
             return engine
 

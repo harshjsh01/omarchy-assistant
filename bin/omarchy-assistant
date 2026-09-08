@@ -19,6 +19,7 @@ Usage:
   omarchy-assistant listen                 Trigger voice listening cycle (push-to-talk)
   omarchy-assistant continuous [start|stop] Hands-free continuous listening mode
   omarchy-assistant chat [--cli|--log]    View live chat log or attach to interactive Antigravity CLI
+  omarchy-assistant test-stt [--loop|-s N] Test speech-to-text live without executing commands
   omarchy-assistant stop-listening        Cancel the active listening cycle
   omarchy-assistant exec "<command>"       Execute a voice command via text (dry-run/test)
   omarchy-assistant status                 Show daemon status and configuration
@@ -161,6 +162,11 @@ case "$cmd" in
                 tail -n 35 -f "$chat_log"
                 ;;
         esac
+        ;;
+
+    test-stt|stt-test|stt)
+        shift || true
+        PYTHONPATH="$REPO_DIR" python3 -m daemon.test_stt "$@"
         ;;
 
     status)
