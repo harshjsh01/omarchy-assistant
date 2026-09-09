@@ -165,8 +165,7 @@ class CommandRouter:
                 cmd,
                 cwd=work_dir,
                 capture_output=True,
-                text=True,
-                timeout=120
+                text=True
             )
 
             if res.returncode == 0 and res.stdout.strip():
@@ -336,8 +335,7 @@ class CommandRouter:
                 [agy_bin, "--effort", "low", "--dangerously-skip-permissions", "--output-format", "json", "--print", "Hello Bro, fresh session initialized."],
                 cwd=work_dir,
                 capture_output=True,
-                text=True,
-                timeout=45
+                text=True
             )
             if res.returncode == 0 and res.stdout.strip():
                 data = json.loads(res.stdout.strip())

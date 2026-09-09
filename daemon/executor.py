@@ -345,8 +345,7 @@ class ActionExecutor:
                     shell=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=7
+                    text=True
                 )
                 stdout = proc.stdout.strip()
                 stderr = proc.stderr.strip()
