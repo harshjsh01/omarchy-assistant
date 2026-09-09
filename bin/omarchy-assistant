@@ -13,7 +13,8 @@ REPO_DIR="$(cd "$(dirname "$REAL_PATH")/.." && pwd)"
 
 usage() {
     cat <<USAGE
-Omarchy Voice Assistant — Hands-free voice control for Omarchy Linux
+Omarchy Voice Assistant (B.R.O. — Binary Response Orchestrator)
+Autonomous hands-free voice control and desktop engineering for Omarchy Linux
 
 Usage:
   omarchy-assistant listen                 Trigger voice listening cycle (push-to-talk)

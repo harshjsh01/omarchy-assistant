@@ -221,7 +221,7 @@ class SessionManager:
         """Render SESSIONS.md with structured table and session cards."""
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines = [
-            "# 🗂️ Bro Assistant — Antigravity Sessions & Memory Index",
+            "# 🗂️ B.R.O. (Binary Response Orchestrator) — Antigravity Sessions & Memory Index",
             f"*Last Updated: {now_str} | Single Persistent Desktop Session Management*\n",
             "> [!NOTE]",
             "> Bro tracks all conversations and projects in `~/Work`. You can switch back to any past session at any time",
