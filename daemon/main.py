@@ -457,13 +457,14 @@ class AssistantDaemon:
 
                 result = self.executor.execute(action)
 
-                if action.get("spoken_response"):
+                spoken_response = result.get("spoken_response") or action.get("spoken_response", "")
+                if spoken_response:
                     self.set_state(
                         "speaking",
                         transcript=text,
-                        action_desc=action.get("spoken_response", "")
+                        action_desc=spoken_response
                     )
-                    self.tts.speak(action["spoken_response"])
+                    self.tts.speak(spoken_response)
 
                 time.sleep(1.0)
                 self.set_state("idle")

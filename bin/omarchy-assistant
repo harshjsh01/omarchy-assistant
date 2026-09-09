@@ -138,6 +138,7 @@ case "$cmd" in
             --cli|-cli|cli|interactive)
                 echo "🤖 Attaching to Antigravity CLI session (Conversation: ${active_cid:-latest})..."
                 echo "💡 Tip: To view the live log of all voice commands and actions, run: omarchy-assistant chat"
+                cd "${HOME}/Work" || true
                 if [[ -n "$active_cid" ]]; then
                     exec agy --conversation "$active_cid"
                 else
