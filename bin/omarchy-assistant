@@ -77,10 +77,13 @@ case "$cmd" in
         send_socket '{"action": "listen"}'
         ;;
 
-    stop-listening)
+    stop-listening|cancel|reset|reset-state)
         if is_daemon_running; then
-            send_socket '{"action": "stop_listening"}'
+            send_socket '{"action": "reset_state"}'
         fi
+        echo '{"state": "idle", "continuous_mode": false, "transcript": "", "last_action": ""}' > /tmp/omarchy-assistant-state.json 2>/dev/null || true
+        qs ipc -t assistant updateState '{"state": "idle"}' 2>/dev/null || true
+        echo "Assistant state reset to idle."
         ;;
 
     continuous)

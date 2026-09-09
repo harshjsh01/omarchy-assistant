@@ -34,7 +34,7 @@ class AssistantDaemon:
         self.tts = TTSEngine(self.config)
         self.meeting = MeetingRecorder(self.config, self.stt, self.router)
 
-        self.state = "idle"  # idle, listening, processing, executing, speaking, meeting_recording, continuous_standby
+        self.state = None  # idle, listening, processing, executing, speaking, meeting_recording, continuous_standby
         self.continuous_mode = False
         self._continuous_thread = None
         self._dialogue_active_until = 0.0
@@ -45,11 +45,11 @@ class AssistantDaemon:
         self.lock = threading.Lock()
 
         self.ipc_server = IPCServer(self.handle_ipc_request)
-        self.set_state("idle")
+        self.set_state("idle", force=True)
 
-    def set_state(self, state: str, transcript: str = "", action_desc: str = "") -> None:
+    def set_state(self, state: str, transcript: str = "", action_desc: str = "", force: bool = False) -> None:
         """Atomically update state and persist to /tmp/omarchy-assistant-state.json."""
-        if (state == self.state and 
+        if not force and (state == self.state and 
             (not transcript or transcript == self.current_transcript) and
             action_desc == self._last_action_desc):
             return
@@ -99,12 +99,12 @@ class AssistantDaemon:
             threading.Thread(target=self._run_voice_pipeline, daemon=True).start()
             return {"status": "started", "message": "Listening started."}
 
-        elif action == "stop_listening":
-            if self.state == "listening":
+        elif action in ["stop_listening", "cancel", "reset", "reset_state", "idle"]:
+            if hasattr(self, "recorder"):
                 self.recorder.stop_recording()
-                self.set_state("idle")
-                return {"status": "stopped"}
-            return {"status": "not_listening"}
+            target_state = "continuous_standby" if self.continuous_mode else "idle"
+            self.set_state(target_state, force=True)
+            return {"status": "ok", "state": target_state}
 
         elif action == "toggle_tts":
             self.tts.enabled = not self.tts.enabled
@@ -253,14 +253,13 @@ class AssistantDaemon:
                     self._continuous_thread.start()
                     return
 
-                # Done
-                time.sleep(0.5)
-                self.set_state("idle")
+                time.sleep(0.3)
 
             except Exception as e:
                 print(f"[omarchy-assistant] Pipeline error: {e}", file=sys.stderr)
-                self.set_state("idle")
             finally:
+                if not (self.continuous_mode and getattr(self, "_continuous_thread", None) and self._continuous_thread.is_alive()):
+                    self.set_state("idle", force=True)
                 self.is_busy = False
 
     def _is_addressed_to_assistant(self, transcript: str) -> bool:
@@ -466,10 +465,13 @@ class AssistantDaemon:
                     )
                     self.tts.speak(spoken_response)
 
-                time.sleep(1.0)
-                self.set_state("idle")
+                time.sleep(0.5)
 
+            except Exception as e:
+                print(f"[omarchy-assistant] Text pipeline error: {e}", file=sys.stderr)
             finally:
+                target_state = "continuous_standby" if self.continuous_mode else "idle"
+                self.set_state(target_state, force=True)
                 self.is_busy = False
 
     def run(self):
