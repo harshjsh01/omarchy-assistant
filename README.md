@@ -1,34 +1,25 @@
-# 🎙️ Omarchy Voice Assistant
+# 🎙️ Bro (Binary Response Orchestrator) — Omarchy Desktop & AI Assistant
 
 [![Platform](https://img.shields.io/badge/Platform-Omarchy%20Linux%20%7C%20Arch%20Linux-blue?logo=archlinux)](https://omarchy.org/)
 [![Window Manager](https://img.shields.io/badge/WM-Hyprland-brightgreen)](https://hyprland.org/)
 [![Shell](https://img.shields.io/badge/Shell-Quickshell-purple)](https://quickshell.outfoxxed.me/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Omarchy Voice Assistant** is an intelligent, low-latency voice command system and AI assistant engineered specifically for **Omarchy Linux** (Arch Linux with Hyprland and Quickshell).
+**Bro** (**B**inary **R**esponse **O**rchestrator) is an autonomous, low-latency conversational desktop AI assistant and voice command system engineered specifically for **Omarchy Linux** (Arch Linux with Hyprland and Quickshell), powered by Google Gemini via Antigravity CLI.
 
-Control your entire operating system using natural speech — switch workspaces, launch apps, manage audio and brightness, toggle themes, capture screenshots, dictate text into active windows, or chat with local/cloud LLMs.
+Control your entire operating system using natural speech or text — switch workspaces, launch apps, manage audio and brightness, capture screenshots, dictate text, manage past sessions with semantic memory recall, or execute complex coding workflows.
 
 ---
 
-## ✨ Features
+## ✨ Key Capabilities
 
-- **🏎️ Sub-Second Voice Control**: Instant execution (<500ms) with lightweight audio capture and Voice Activity Detection (VAD).
-- **🪟 Full Hyprland & Wayland Mastery (Omarvis Core)**: Direct IPC dispatch to switch workspaces, move windows, toggle fullscreen, float windows, and adjust layouts.
-- **🎙️ PipeWire Dual-Channel Meeting Transcription (Omavoice Integration)**:
-  - Simultaneously captures **local microphone** (you) and **system speaker output** (remote participants in Zoom, Google Meet, Microsoft Teams, Discord).
-  - Generates timestamped Markdown transcripts and AI executive summaries directly in `~/Documents/Omarchy-Transcripts/`.
-  - Start/stop via voice (`"start meeting transcription"` / `"stop meeting"`) or hotkey (`SUPER + ALT + A`).
-- **🎨 Native Omarchy Quickshell Plugin**:
-  - **Animated Status Bar Widget**: Displays live microphone states (`󰍬` idle, listening, thinking, executing, recording).
-  - **Heads-Up Display (HUD) Overlay**: Floating visual card showing live speech transcripts, animated audio waves, and action badges.
-- **🔌 Multi-Engine Speech Recognition (STT)**:
-  - **Offline Local**: `faster-whisper` (CTranslate2 INT8 quantized models) for 100% private, offline use.
-  - **Ultra-Fast Cloud**: Groq Cloud API (`whisper-large-v3-turbo`) with response times under ~180ms.
-  - **Zero-Config Cloud**: OpenAI Whisper API or Google Web Speech API.
-- **👁️ Screen & Context Awareness**: Ask `"What is on my screen?"` to trigger instant Wayland screenshot capture and visual analysis.
-- **⌨️ Voice Dictation & Input Synthesis**: Speak `"Type Hello World"` or `"Copy my email"` to inject keystrokes into any active Wayland window via `wtype` and `wl-copy`.
-- **🧠 Natural Language AI Fallback**: Complex requests are seamlessly routed to local **Ollama** or cloud LLMs to translate intent into shell commands.
+- **🧠 Autonomous Antigravity Execution (Powered by Gemini)**: Seamlessly executes compound terminal workflows, builds software projects, and manages operating system configurations.
+- **🗂️ Antigravity Session Indexing & Semantic Recall (`~/Work/SESSIONS.md`)**: Automatically tracks, indexes, and summarizes all Antigravity CLI sessions. Jump to past sessions naturally (e.g. *"Bro, switch to that session where we played Seedhe Maut"* or `omarchy-assistant sessions switch <id|topic>`).
+- **🏎️ Real-World Task Verification & Self-Correction**: Bro verifies every action (e.g. querying `hyprctl clients -j` and active workspaces) to ensure apps actually launch and workspaces switch before confirming completion.
+- **🎙️ Hands-Free Continuous Listening**: Wake up Bro hands-free (*"Hey Bro"*, *"Suno Bro"*), speak commands, or put it to sleep (*"Go to sleep"*, *"Chup ho jao"*).
+- **🪟 Full Hyprland & Wayland Mastery**: Direct IPC dispatch to switch workspaces, move windows, toggle fullscreen, float windows, and adjust layouts.
+- **🎙️ PipeWire Dual-Channel Meeting Transcription**: Simultaneously records mic and speaker call audio, transcribing conversations with executive Markdown summaries in `~/Documents/Omarchy-Transcripts/`.
+- **🎨 Native Omarchy Quickshell Plugin**: Animated top-bar widget (`harshjsh01.assistant`) displaying live mic states, floating HUD overlays, and Sarvam Indian TTS feedback.
 
 ---
 
@@ -127,6 +118,12 @@ omarchy-assistant meeting status   # Checks active recording duration
 omarchy-assistant meeting stop     # Stops, transcribes, and saves to ~/Documents/Omarchy-Transcripts/
 omarchy-assistant meeting list     # Lists saved meeting notes
 
+# Antigravity Session Management & Semantic Switching
+omarchy-assistant sessions list                    # List all recorded sessions & status
+omarchy-assistant sessions current                 # Show active and previous conversation
+omarchy-assistant sessions switch <id|topic>       # Semantic or direct jump to a session
+omarchy-assistant sessions sync                    # Re-index ~/Work and refresh SESSIONS.md
+
 # Simulate or test command via text
 omarchy-assistant exec "switch to workspace 3"
 omarchy-assistant exec "volume 80%"
@@ -151,6 +148,7 @@ omarchy-assistant/
 │   └── config.json                # Default configuration
 ├── daemon/
 │   ├── main.py                    # Main daemon entrypoint
+│   ├── session_manager.py         # Session indexer & semantic recall engine
 │   ├── audio_recorder.py          # PipeWire/ALSA capture with VAD
 │   ├── stt_engine.py              # Modular STT engines (Whisper, Groq)
 │   ├── command_router.py          # Intent parser & regex engine
