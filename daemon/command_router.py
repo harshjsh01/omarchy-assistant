@@ -14,10 +14,13 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from daemon.session_manager import SessionManager, META_SESSION_ID
+
 
 class CommandRouter:
     def __init__(self, config: Dict[str, Any]):
         self.config = config
+        self.sessions = SessionManager(config)
 
     def route(self, text: str) -> Dict[str, Any]:
         """
@@ -67,6 +70,38 @@ class CommandRouter:
                 "spoken_response": "Starting a fresh Antigravity session.",
                 "category": "assistant"
             }
+
+        # List / show all sessions
+        if re.search(r"\b(list\s+(all\s+)?sessions|show\s+(all\s+)?sessions|all\s+sessions|session\s+list|sessions\s+list|what\s+sessions|sessions\s+history)\b", norm_text):
+            sessions = self.sessions.load_sessions()
+            top_titles = [f"'{s['title']}'" for s in sessions[:3]]
+            spoken = f"You have {len(sessions)} recorded sessions including {', '.join(top_titles)}. You can view the full index in SESSIONS dot M D."
+            return {
+                "status": "matched",
+                "intent": "list_sessions",
+                "command": "omarchy launch terminal -e omarchy-assistant sessions list",
+                "spoken_response": spoken,
+                "category": "assistant"
+            }
+
+        # Semantic jump / switch to past session or previous session
+        # e.g., "switch to that session where we were playing seedhe maut", "switch back to the session where we set up face unlock", "switch to session 81bb3c7c"
+        if re.search(r"\b(switch\s+to|jump\s+to|go\s+to|switch\s+back\s+to|jump\s+back\s+to|go\s+back\s+to|resume|open)\b", norm_text) and \
+           (re.search(r"\b(session|chat|conversation)\b", norm_text) or re.search(r"\b(where\s+we|which\s+session|that\s+session)\b", norm_text)):
+            if re.search(r"\b(previous|pichla|pichle|former|last)\s+(session|chat|one)\b", norm_text) or norm_text in ["switch to previous", "go back to previous", "jump back", "resume previous"]:
+                return self._switch_to_previous_session()
+
+            target_query = stripped_prompt
+            target_query = re.sub(r"^(switch\s+to|jump\s+to|go\s+to|switch\s+back\s+to|jump\s+back\s+to|go\s+back\s+to|resume|open)\s+", "", target_query, flags=re.IGNORECASE).strip()
+            success, s, spoken = self.sessions.switch_to_session(target_query)
+            if success and s:
+                return {
+                    "status": "matched",
+                    "intent": "switch_session",
+                    "command": "",
+                    "spoken_response": spoken,
+                    "category": "assistant"
+                }
 
         # Jump back to previous chat / resume previous session
         if (re.search(r"\b(jump\s+back|go\s+back|switch\s+back|resume|pichla|pichle|previous)\b", norm_text) and re.search(r"\b(session|chat|conversation|assistant|one)\b", norm_text)) or \
@@ -316,8 +351,10 @@ class CommandRouter:
 
     def _get_current_session_info(self) -> Dict[str, Any]:
         """Return information about the currently active Antigravity session."""
-        cid = self._get_active_conversation_id()
-        title = self._get_session_title(cid)
+        active_cid = self.sessions.get_active_session_id()
+        sessions = self.sessions.load_sessions()
+        curr = next((s for s in sessions if s["id"] == active_cid), None)
+        title = curr["title"] if curr else self._get_session_title(active_cid)
         spoken = f"We are currently in session: {title}."
         return {
             "status": "matched",
@@ -328,141 +365,37 @@ class CommandRouter:
         }
 
     def _switch_to_previous_session(self) -> Dict[str, Any]:
-        """Switch back to the previous session or Chat AI Assistant."""
-        conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
-        prev_file = os.path.expanduser("~/.config/omarchy-assistant/previous_conversation_id.txt")
-        current_cid = ""
-        if os.path.exists(conv_file):
-            try:
-                with open(conv_file, "r") as f:
-                    current_cid = f.read().strip()
-            except Exception:
-                pass
-
-        target_cid = ""
-        # 1. Try reading from previous_conversation_id.txt
-        if os.path.exists(prev_file):
-            try:
-                with open(prev_file, "r") as f:
-                    cand = f.read().strip()
-                    if cand and cand != current_cid and cand != "42be53a5-6dfe-4730-b1b5-42d8d1159d6f":
-                        target_cid = cand
-            except Exception:
-                pass
-
-        # 2. If not found or same, look for "Chat AI Assistant" in SQLite
-        db_path = os.path.expanduser("~/.gemini/antigravity-cli/conversation_summaries.db")
-        if not target_cid and os.path.exists(db_path):
-            try:
-                import sqlite3
-                with sqlite3.connect(db_path) as conn:
-                    # Prefer the canonical Chat AI Assistant session
-                    row = conn.execute(
-                        "SELECT conversation_id FROM conversation_summaries "
-                        "WHERE workspace_uris LIKE '%Work%' "
-                        "AND (title LIKE '%Chat AI Assistant%' OR conversation_id = '956ae870-07b0-4a98-ba10-bda0c72f7c81') "
-                        "AND conversation_id != '42be53a5-6dfe-4730-b1b5-42d8d1159d6f' "
-                        "ORDER BY last_modified_time DESC LIMIT 1"
-                    ).fetchone()
-                    if row and row[0] and row[0] != current_cid:
-                        target_cid = row[0]
-                    else:
-                        # Otherwise get 2nd most recent non-meta session
-                        rows = conn.execute(
-                            "SELECT conversation_id FROM conversation_summaries "
-                            "WHERE workspace_uris LIKE '%Work%' "
-                            "AND conversation_id != '42be53a5-6dfe-4730-b1b5-42d8d1159d6f' "
-                            "ORDER BY last_modified_time DESC LIMIT 5"
-                        ).fetchall()
-                        for r in rows:
-                            if r[0] != current_cid:
-                                target_cid = r[0]
-                                break
-            except Exception:
-                pass
-
-        if not target_cid:
+        """Switch back to the previous session or canonical Chat AI Assistant."""
+        success, s, spoken = self.sessions.switch_to_session("previous")
+        if not success or not s:
             # Fallback to Chat AI Assistant canonical ID
-            target_cid = "956ae870-07b0-4a98-ba10-bda0c72f7c81"
+            success, s, spoken = self.sessions.switch_to_session("956ae870")
 
-        # Swap active and previous
-        if current_cid and current_cid != target_cid and current_cid != "42be53a5-6dfe-4730-b1b5-42d8d1159d6f":
-            try:
-                os.makedirs(os.path.dirname(prev_file), exist_ok=True)
-                with open(prev_file, "w") as pf:
-                    pf.write(current_cid)
-            except Exception:
-                pass
-
-        os.makedirs(os.path.dirname(conv_file), exist_ok=True)
-        with open(conv_file, "w") as cf:
-            cf.write(target_cid)
-
-        title = self._get_session_title(target_cid)
-        spoken = f"Switched back to session: {title}."
-        print(f"[omarchy-assistant] Switched active session to: {target_cid} ({title})", flush=True)
+        if success and s:
+            print(f"[omarchy-assistant] Switched active session to: {s['id']} ({s['title']})", flush=True)
+            return {
+                "status": "matched",
+                "intent": "switch_session",
+                "command": "",
+                "spoken_response": f"Switched back to session: {s['title']}.",
+                "category": "assistant"
+            }
 
         return {
-            "status": "matched",
+            "status": "error",
             "intent": "switch_session",
             "command": "",
-            "spoken_response": spoken,
+            "spoken_response": "Could not locate a previous session to switch to.",
             "category": "assistant"
         }
 
     def _get_active_conversation_id(self) -> str:
         """Retrieve the active conversation ID, ensuring we NEVER use or overwrite with meta session."""
-        conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
-        if os.path.exists(conv_file):
-            try:
-                with open(conv_file, "r") as f:
-                    cid = f.read().strip()
-                    if cid and cid != "42be53a5-6dfe-4730-b1b5-42d8d1159d6f":
-                        return cid
-            except Exception:
-                pass
-
-        # If not on disk, check conversation_summaries.db for existing session in ~/Work (excluding meta session)
-        try:
-            import sqlite3
-            db_path = os.path.expanduser("~/.gemini/antigravity-cli/conversation_summaries.db")
-            if os.path.exists(db_path):
-                with sqlite3.connect(db_path) as conn:
-                    cur = conn.cursor()
-                    row = cur.execute(
-                        "SELECT conversation_id FROM conversation_summaries "
-                        "WHERE workspace_uris LIKE '%Work%' "
-                        "AND conversation_id != '42be53a5-6dfe-4730-b1b5-42d8d1159d6f' "
-                        "ORDER BY last_modified_time DESC LIMIT 1"
-                    ).fetchone()
-                    if row and row[0]:
-                        cid = row[0]
-                        os.makedirs(os.path.dirname(conv_file), exist_ok=True)
-                        with open(conv_file, "w") as f:
-                            f.write(cid)
-                        return cid
-        except Exception:
-            pass
-
-        # Only if still none found, create one now and lock it in
-        return self._create_new_antigravity_session()
+        return self.sessions.get_active_session_id()
 
     def _create_new_antigravity_session(self) -> str:
-        """Start a fresh conversation in ~/Work, saving current one as previous."""
+        """Start a fresh conversation in ~/Work, saving current one as previous and syncing SESSIONS.md."""
         try:
-            conv_file = os.path.expanduser("~/.config/omarchy-assistant/active_conversation_id.txt")
-            prev_file = os.path.expanduser("~/.config/omarchy-assistant/previous_conversation_id.txt")
-            if os.path.exists(conv_file):
-                try:
-                    with open(conv_file, "r") as f:
-                        old_cid = f.read().strip()
-                        if old_cid and old_cid != "42be53a5-6dfe-4730-b1b5-42d8d1159d6f":
-                            os.makedirs(os.path.dirname(prev_file), exist_ok=True)
-                            with open(prev_file, "w") as pf:
-                                pf.write(old_cid)
-                except Exception:
-                    pass
-
             work_dir = os.path.expanduser("~/Work")
             os.makedirs(work_dir, exist_ok=True)
             agy_bin = shutil.which("agy") or os.path.expanduser("~/.gemini/antigravity-cli/bin/agy")
@@ -477,10 +410,9 @@ class CommandRouter:
             if res.returncode == 0 and res.stdout.strip():
                 data = json.loads(res.stdout.strip())
                 new_id = data.get("conversation_id", "")
-                if new_id:
-                    os.makedirs(os.path.dirname(conv_file), exist_ok=True)
-                    with open(conv_file, "w") as f:
-                        f.write(new_id)
+                if new_id and new_id != META_SESSION_ID:
+                    self.sessions.set_active_session_id(new_id)
+                    self.sessions.sync_sessions()
                     return new_id
         except Exception as e:
             print(f"[omarchy-assistant] Failed to start new Antigravity session: {e}", file=sys.stderr)

@@ -27,6 +27,7 @@ Usage:
   omarchy-assistant stop                   Stop assistant daemon
   omarchy-assistant restart                Restart assistant daemon
   omarchy-assistant daemon-service         Run daemon in foreground (for systemd)
+  omarchy-assistant sessions [list|sync|switch|current] Manage & jump between Antigravity sessions
   omarchy-assistant meeting start          Start dual-channel meeting recording & transcription
   omarchy-assistant meeting stop           Stop meeting and generate Markdown transcript + summary
   omarchy-assistant meeting status         Check active meeting recording status
@@ -259,6 +260,11 @@ print('✅ Saved $key_field and updated STT backend in ' + cfg_path)
     service)
         subaction="${2:-status}"
         systemctl --user "$subaction" omarchy-assistant.service
+        ;;
+
+    sessions|session)
+        shift || true
+        PYTHONPATH="$REPO_DIR" python3 -m daemon.session_manager "$@"
         ;;
 
     meeting)
